@@ -23,7 +23,7 @@ Last updated: 2026-11-11
 
 ## Not yet verified
 
-- GitHub Actions runs currently end in `startup_failure` with zero jobs. This means no workflow step has run; passing CI has not been established.
+- The manually triggered CI run failed before any workflow steps executed because GitHub reported the account is locked due to a billing issue. Subsequent push-triggered runs are currently queued; no workflow step has yet been verified. Passing CI has not been established.
 - The repository is currently public by owner decision. Branch protection has not been verified in the current public-repository state; do not assume it is active.
 - The application has not yet been installed, compiled, or run against PostgreSQL in a local Linux environment during this work session.
 - The SQL migrations and RLS smoke test have been committed but have not yet been executed in a live PostgreSQL instance.
