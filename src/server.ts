@@ -1,8 +1,9 @@
 import Fastify from "fastify";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
 import { pool, withTenantTransaction } from "./database.js";
 import { securityEventSchema } from "./security-event.js";
+import { securityEventDigest } from "./security-event-digest.js";
 
 const app = Fastify({
   logger: true,
@@ -63,9 +64,7 @@ app.post("/v1/events", async (request, reply) => {
   };
 
   try {
-    const payloadDigest = createHash("sha256")
-      .update(JSON.stringify(event))
-      .digest("hex");
+    const payloadDigest = securityEventDigest(event);
 
     const outcome = await withTenantTransaction(config.tenantId, async (client) => {
       const inserted = await client.query(
