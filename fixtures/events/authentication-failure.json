@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.1.0",
+  "event_id": "lab-auth-failure-000001",
+  "tenant_id": "lab-tenant",
+  "source": {
+    "connector_id": "lab-connector-01",
+    "kind": "synthetic-lab",
+    "version": "0.1.0",
+    "host_ref": "lab-workstation-01"
+  },
+  "event_type": "identity.authentication.failure",
+  "observed_at": "2026-11-11T12:00:00Z",
+  "severity_hint": "medium",
+  "provenance": {
+    "record_ref": "scenario-auth-failure-001",
+    "collection_method": "synthetic_replay"
+  },
+  "data": {
+    "principal_ref": "user-test-01",
+    "failure_count_window": 8,
+    "window_seconds": 60,
+    "source_address": "192.0.2.25",
+    "result": "failure"
+  }
+}
