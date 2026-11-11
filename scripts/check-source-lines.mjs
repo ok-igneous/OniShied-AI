@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-const roots = ["src", "scripts", "database"];
+const roots = ["."];
 const extensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".sql"]);
 const limit = 500;
 const violations = [];
@@ -18,7 +18,7 @@ async function walk(directory) {
   for (const entry of entries) {
     const filePath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (!["node_modules", "dist", "coverage", ".git"].includes(entry.name)) {
+      if (!["node_modules", "dist", "coverage", ".git", ".next", "build", "vendor"].includes(entry.name)) {
         await walk(filePath);
       }
       continue;
