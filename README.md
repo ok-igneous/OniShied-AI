@@ -78,3 +78,4 @@ All rights reserved unless a license is added by the project owner. No permissio
 - [Repository governance](docs/REPOSITORY_GOVERNANCE.md): GitHub Actions, pull-request workflow, branch-protection status, and contributor controls.
 - [Local lab](docs/LOCAL_LAB.md): PostgreSQL setup, RLS smoke test, and synthetic event replay.
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md): implemented controls, unverified work, and current blockers.
+- [Public repository review](docs/PUBLIC_REPOSITORY_REVIEW.md): current visibility risks and the limits of the history review.
