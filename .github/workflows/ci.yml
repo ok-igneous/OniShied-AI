@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Enforce source-file size limit
+        run: npm run check:lines
+
       - name: Run schema tests
         run: npm test
 
