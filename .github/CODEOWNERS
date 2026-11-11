@@ -1,0 +1,5 @@
+# Security-sensitive changes should be reviewed by the project owner.
+/* @ok-igneous
+/database/ @ok-igneous
+/src/ @ok-igneous
+/.github/ @ok-igneous
