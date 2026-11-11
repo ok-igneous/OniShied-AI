@@ -76,3 +76,8 @@ Use synthetic telemetry, intentionally vulnerable local labs, or systems with do
 - Audit records show denied and failed actions.
 - Emergency pause prevents new executions.
 - Connector compromise can be contained by revoking its identity.
+
+
+## Code and database security standards
+
+Implementation must comply with [CODE_STANDARDS.md](CODE_STANDARDS.md) and [DATABASE_SECURITY.md](DATABASE_SECURITY.md). The 500-line source-file ceiling is mandatory. Database controls must include least-privilege roles, tenant isolation tests, parameterized queries, encrypted connections and storage, controlled backups, tested restoration, and documented retention/deletion. RLS is defense in depth and must be correctly configured and tested if adopted. The initial prototype is not production-ready merely because these requirements are documented.
