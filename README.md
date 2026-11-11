@@ -70,3 +70,11 @@ This repository is the project foundation. Architecture and implementation choic
 ## License
 
 All rights reserved unless a license is added by the project owner. No permission to reuse, distribute, or deploy this code is granted by this repository's visibility or contents.
+
+## Engineering and database standards
+
+- [Code standards](docs/CODE_STANDARDS.md): mandatory modular design and a hard maximum of 500 lines per source file.
+- [Database security](docs/DATABASE_SECURITY.md): least-privilege roles, PostgreSQL tenant isolation, transaction safety, encryption, backup, and production launch gates.
+- [Repository governance](docs/REPOSITORY_GOVERNANCE.md): GitHub Actions, pull-request workflow, branch-protection status, and contributor controls.
+- [Local lab](docs/LOCAL_LAB.md): PostgreSQL setup, RLS smoke test, and synthetic event replay.
+- [Implementation status](docs/IMPLEMENTATION_STATUS.md): implemented controls, unverified work, and current blockers.
