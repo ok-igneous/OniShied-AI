@@ -5,6 +5,7 @@ const configSchema = z.object({
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1),
+  DATABASE_SSL: z.enum(["true", "false"]).default("false"),
   LAB_CONNECTOR_ID: z.string().min(1).max(128),
   LAB_CONNECTOR_TOKEN: z.string().min(32),
   LAB_TENANT_ID: z.string().min(1).max(128)
@@ -19,10 +20,15 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration: ${details}`);
 }
 
+if (parsed.data.APP_ENV === "production" && parsed.data.DATABASE_SSL !== "true") {
+  throw new Error("DATABASE_SSL=true is required in production");
+}
+
 export const config = {
   environment: parsed.data.APP_ENV,
   port: parsed.data.APP_PORT,
   databaseUrl: parsed.data.DATABASE_URL,
+  databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
   tenantId: parsed.data.LAB_TENANT_ID
