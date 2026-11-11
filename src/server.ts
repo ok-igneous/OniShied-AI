@@ -1,7 +1,7 @@
 import Fastify from "fastify";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
-import { pool } from "./database.js";
+import { pool, withTenantTransaction } from "./database.js";
 import { securityEventSchema } from "./security-event.js";
 
 const app = Fastify({
@@ -63,27 +63,58 @@ app.post("/v1/events", async (request, reply) => {
   };
 
   try {
-    const result = await pool.query(
-      `INSERT INTO onishield.security_events
-        (tenant_id, connector_id, event_id, schema_version, event_type,
-         observed_at, ingested_at, severity_hint, event_json)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
-       ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING
-       RETURNING event_id`,
-      [
-        config.tenantId,
-        config.connectorId,
-        event.event_id,
-        event.schema_version,
-        event.event_type,
-        event.observed_at,
-        ingestedAt,
-        event.severity_hint ?? "unknown",
-        JSON.stringify(normalizedEvent)
-      ]
-    );
+    const payloadDigest = createHash("sha256")
+      .update(JSON.stringify(event))
+      .digest("hex");
 
-    if (result.rowCount === 0) {
+    const outcome = await withTenantTransaction(config.tenantId, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO onishield.security_events
+          (tenant_id, connector_id, event_id, schema_version, event_type,
+           observed_at, ingested_at, severity_hint, event_json, payload_sha256)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+         ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING
+         RETURNING event_id`,
+        [
+          config.tenantId,
+          config.connectorId,
+          event.event_id,
+          event.schema_version,
+          event.event_type,
+          event.observed_at,
+          ingestedAt,
+          event.severity_hint ?? "unknown",
+          JSON.stringify(normalizedEvent),
+          payloadDigest
+        ]
+      );
+
+      if (inserted.rowCount === 1) return "accepted" as const;
+
+      const existing = await client.query<{ payload_sha256: string | null }>(
+        `SELECT payload_sha256
+           FROM onishield.security_events
+          WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3`,
+        [config.tenantId, config.connectorId, event.event_id]
+      );
+
+      if (existing.rowCount !== 1) {
+        throw new Error("Conflicting event could not be read inside tenant scope");
+      }
+
+      return existing.rows[0]?.payload_sha256 === payloadDigest
+        ? "duplicate" as const
+        : "event_id_conflict" as const;
+    });
+
+    if (outcome === "event_id_conflict") {
+      return reply.code(409).send({
+        error: "event_id_reused_with_different_payload",
+        event_id: event.event_id
+      });
+    }
+
+    if (outcome === "duplicate") {
       return reply.code(200).send({
         status: "duplicate",
         event_id: event.event_id
