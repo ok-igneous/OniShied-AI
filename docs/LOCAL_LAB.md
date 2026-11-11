@@ -11,18 +11,22 @@ This is a development-only setup for the first ingestion demonstrator. Use synth
 
 ## Configure
 
-1. Create a disposable local PostgreSQL database.
-2. Apply `database/migrations/001_create_security_events.sql` to that database.
-3. Copy `.env.example` to `.env`.
+1. Create unique local passwords for the migration and runtime roles. Do not reuse personal or production credentials.
+2. Run `database/bootstrap-roles.sql` as a local PostgreSQL administrator, supplying `migrator_password` and `app_password` through psql variables. This is a one-time setup script; do not run it against production.
+3. Connect as `onishield_migrator`, assume `onishield_owner`, and apply migrations `001_create_security_events.sql` and `002_tenant_rls_and_payload_digest.sql` in order. Record applied migration versions; do not repeatedly apply migrations blindly.
+4. Run `database/grant-runtime-privileges.sql` as `onishield_owner`.
+5. Set `DATABASE_URL` to the `onishield_app` runtime role, not the migration or administrator role.
+6. Copy `.env.example` to `.env`.
 4. Set the following local values:
    - `DATABASE_URL`
    - `LAB_CONNECTOR_ID=lab-connector-01`
    - `LAB_CONNECTOR_TOKEN` to a random secret of at least 32 characters
    - `LAB_TENANT_ID=lab-tenant`
-5. Install dependencies with `npm install`.
-6. Run `npm run dev`.
+7. Install dependencies with `npm install` until the project lockfile is committed; after that use `npm ci`.
+8. Run `npm run check:lines`, `npm test`, `npm run typecheck`, and `npm run build`.
+9. Run `npm run dev`.
 
-The server binds to `127.0.0.1` only. Do not expose it to a network.
+The server binds to `127.0.0.1` only. Do not expose it to a network. The runtime database role has only SELECT and INSERT privileges and is subject to tenant Row-Level Security. Tenant context is set transaction-locally for each ingestion transaction.
 
 ## Smoke test
 
@@ -41,7 +45,7 @@ Content-Type: application/json
 
 Expected first response: HTTP 202 with `status: accepted`.
 
-Submit the exact same event again: HTTP 200 with `status: duplicate`.
+Submit the exact same event again: HTTP 200 with `status: duplicate`. Reuse the same event ID with a changed payload: HTTP 409 with `event_id_reused_with_different_payload`.
 
 Try a different tenant ID: HTTP 403. Try an invalid event: HTTP 400. Try a missing or incorrect token: HTTP 401.
 
@@ -51,3 +55,22 @@ Try a different tenant ID: HTTP 403. Try an invalid event: HTTP 400. Try a missi
 - The database role and migration privileges must be hardened before production.
 - No endpoint agent, AI investigation, detection rules, or response execution is included yet.
 - The sample service binds to loopback and is not intended for internet access.
+
+
+## Database role setup example
+
+Use a shell to supply unique secrets without placing them in the repository:
+
+```sh
+read -rsp "Migration DB password: " MIGRATOR_DB_PASSWORD; echo
+read -rsp "Runtime DB password: " APP_DB_PASSWORD; echo
+psql -v ON_ERROR_STOP=1 \
+  -v migrator_password="$MIGRATOR_DB_PASSWORD" \
+  -v app_password="$APP_DB_PASSWORD" \
+  -f database/bootstrap-roles.sql
+unset MIGRATOR_DB_PASSWORD APP_DB_PASSWORD
+```
+
+Apply migrations using the migration identity and owner role. For example, use a controlled psql session as `onishield_migrator`, execute `SET ROLE onishield_owner`, then apply each migration in order. Run the runtime grants script as `onishield_owner`. Keep migration and runtime connection strings separate. Never grant the application role ownership, superuser, role creation, database creation, or RLS bypass privileges.
+
+The initial schema is lab-only. Before production, validate RLS with two tenants and the actual non-owner runtime role, verify TLS certificate validation, and complete the database security launch gate.
