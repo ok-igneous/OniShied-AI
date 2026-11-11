@@ -31,7 +31,7 @@ If a run shows `startup_failure` with zero jobs, the workflow has not reached it
 
 ## Branch protection limitation
 
-The repository's current `main` branch was checked and reported `protected: false`. The connected GitHub integration could not read or change branch protection. The repository rulesets endpoint reported that rulesets require an eligible plan for this private repository.
+Before the repository was made public, `main` was checked and reported `protected: false`; the connected integration could not read or change branch protection. Branch protection must be rechecked in the current public-repository state. Do not assume it is active.
 
 Do not assume branch protection is active. In GitHub repository Settings → Branches, check whether classic branch protection is available for this plan. If available, protect `main` with:
 - Require a pull request before merging.
