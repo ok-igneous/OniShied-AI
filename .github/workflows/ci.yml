@@ -13,7 +13,21 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -25,6 +39,22 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Provision isolated test database and verify tenant RLS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          MIGRATOR_DB_PASSWORD="$(openssl rand -hex 32)"
+          APP_DB_PASSWORD="$(openssl rand -hex 32)"
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -v migrator_password="$MIGRATOR_DB_PASSWORD" \
+            -v app_password="$APP_DB_PASSWORD" \
+            -f database/bootstrap-roles.sql
+          PGPASSWORD="$MIGRATOR_DB_PASSWORD" psql -h 127.0.0.1 \
+            -U onishield_migrator -d onishield_lab \
+            -v ON_ERROR_STOP=1 -f database/apply-migrations.sql
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \
+            -v ON_ERROR_STOP=1 -f database/tests/tenant_rls_smoke.sql
 
       - name: Enforce source-file size limit
         run: npm run check:lines
