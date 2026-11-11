@@ -71,3 +71,10 @@ Design for retries, idempotency, queue back-pressure, dead-letter handling, conn
 - Model provider, data-processing terms, and fallback strategy.
 
 Record decisions as ADRs under `docs/DECISIONS/`.
+
+
+## Implementation structure and database boundary
+
+All implementation work must follow [CODE_STANDARDS.md](CODE_STANDARDS.md). Source files have a hard 500-line ceiling and should be split into cohesive modules by responsibility. Keep API transport, domain services, persistence, validation, policy enforcement, and integrations separate.
+
+Database design and operations must follow [DATABASE_SECURITY.md](DATABASE_SECURITY.md). Tenant scope must be enforced on every data access path; PostgreSQL RLS should be evaluated as defense in depth. Runtime database credentials must be least-privileged and separate from migration credentials. Production data must not be accepted until the documented database launch gate is satisfied.
