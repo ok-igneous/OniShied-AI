@@ -18,12 +18,13 @@ Last updated: 2026-11-11
 - PostgreSQL tenant-isolation smoke test wired into CI.
 - Source-file size check wired into CI.
 - Dependabot update configuration and CODEOWNERS file.
+- Partial public-repository exposure review documented in [PUBLIC_REPOSITORY_REVIEW.md](PUBLIC_REPOSITORY_REVIEW.md).
 - Repository governance and local lab instructions.
 
 ## Not yet verified
 
 - GitHub Actions runs currently end in `startup_failure` with zero jobs. This means no workflow step has run; passing CI has not been established.
-- The connected GitHub integration cannot change or read branch protection for this private repository. The branch currently reports `protected: false`; rulesets are unavailable on the current repository plan.
+- The repository is currently public by owner decision. Branch protection has not been verified in the current public-repository state; do not assume it is active.
 - The application has not yet been installed, compiled, or run against PostgreSQL in a local Linux environment during this work session.
 - The SQL migrations and RLS smoke test have been committed but have not yet been executed in a live PostgreSQL instance.
 - A committed npm lockfile is still missing. The current execution environment could not reach the npm registry to generate one.
