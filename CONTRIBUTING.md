@@ -46,3 +46,11 @@ Prefer explicit types, narrow interfaces, defensive parsing, deterministic enfor
 ## Contributor conduct
 
 Be respectful, factual, and willing to challenge assumptions. Security claims must be supported by evidence. Report uncertainty rather than overstating confidence.
+
+
+## Mandatory modularity and database standards
+
+- Follow `docs/CODE_STANDARDS.md`: every source-code file has a hard maximum of 500 lines; aim smaller and split by responsibility before reaching the limit.
+- Follow `docs/DATABASE_SECURITY.md` for database roles, tenant isolation, query safety, encryption, backups, and production launch gates.
+- Include tests for tenant isolation and denied access paths when changing data access.
+- Do not introduce a migration or database privilege change without documenting its operational and rollback implications.
