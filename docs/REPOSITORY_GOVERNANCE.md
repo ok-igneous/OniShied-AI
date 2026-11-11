@@ -2,7 +2,7 @@
 
 ## Repository model
 
-- Keep the repository private while the product and security controls are immature.
+- The repository is currently public by an explicit owner decision to keep development moving while GitHub Actions billing access is blocked. This is a temporary exposure decision, not a security recommendation. Reassess visibility before adding proprietary detection logic, customer data, deployment configuration, or integrations.
 - Use `main` as the protected integration branch and short-lived feature branches for work.
 - Contributors should open pull requests; no direct pushes by contributors.
 - Keep the owner account as administrator. Give contributors the minimum repository role needed.
@@ -41,6 +41,15 @@ Do not assume branch protection is active. In GitHub repository Settings → Bra
 - Restrict force pushes and branch deletion.
 
 If the plan does not support protection for this private repository, use the documented manual rule: contributors work only on branches and the owner merges reviewed changes. Upgrade or make the repository public only after consciously evaluating cost and source-code disclosure risk.
+
+## Public repository precautions
+
+Because this repository is currently public:
+- Commit only synthetic fixtures and clearly fake example values.
+- Never commit customer telemetry, production exports, API keys, credentials, private keys, database dumps, internal incident reports, or sensitive architecture details.
+- Review the full commit history before assuming a deleted secret is no longer exposed. If a real secret was committed, revoke/rotate it immediately; deleting the file or rewriting Git history does not invalidate the credential.
+- Verify secret-scanning availability and alert status in repository Settings → Security. Do not assume scanning is active.
+- Consider returning the repository to private once the account-level Actions restriction is resolved, unless public development is an intentional product strategy.
 
 ## Current automation gaps
 
