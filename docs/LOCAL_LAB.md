@@ -74,3 +74,27 @@ unset MIGRATOR_DB_PASSWORD APP_DB_PASSWORD
 Apply migrations using the migration identity and owner role. For example, use a controlled psql session as `onishield_migrator`, execute `SET ROLE onishield_owner`, then apply each migration in order. Run the runtime grants script as `onishield_owner`. Keep migration and runtime connection strings separate. Never grant the application role ownership, superuser, role creation, database creation, or RLS bypass privileges.
 
 The initial schema is lab-only. Before production, validate RLS with two tenants and the actual non-owner runtime role, verify TLS certificate validation, and complete the database security launch gate.
+
+
+## Tenant-isolation smoke test
+
+After migrations and runtime grants, run the SQL test using a database administrator permitted to assume the runtime role:
+
+```sh
+psql -v ON_ERROR_STOP=1 -d onishield_lab -f database/tests/tenant_rls_smoke.sql
+```
+
+The script temporarily assumes `onishield_app`, inserts a synthetic tenant-A row, changes its transaction-local tenant context to tenant B, asserts that tenant B cannot read the row or insert a tenant-A row, and rolls back all test data. A successful SQL exit is required; do not run this against production.
+
+## Synthetic event replay
+
+With the local server running, export the local lab token and replay the checked-in synthetic fixture:
+
+```sh
+export LAB_CONNECTOR_TOKEN='your-local-random-token'
+bash scripts/replay-event.sh
+bash scripts/replay-event.sh
+unset LAB_CONNECTOR_TOKEN
+```
+
+The first request should return HTTP 202; the second identical request should return HTTP 200 as a duplicate. The script refuses non-localhost targets. To test event-ID collision handling, submit a modified copy of the fixture while keeping the same `event_id`; the API should return HTTP 409.
