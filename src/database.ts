@@ -35,3 +35,22 @@ export async function withTenantTransaction<T>(
     client.release();
   }
 }
+
+/**
+ * Authentication functions are intentionally isolated from the general
+ * application pool. Do not fall back to DATABASE_URL if this URL is absent.
+ */
+export const authPool = config.authDatabaseUrl
+  ? new Pool({
+      connectionString: config.authDatabaseUrl,
+      max: 3,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 5_000,
+      application_name: "onishield-operator-auth",
+      ...(config.databaseSsl ? { ssl: { rejectUnauthorized: true } } : {})
+    })
+  : null;
+
+authPool?.on("error", (error) => {
+  console.error("Unexpected idle operator-auth PostgreSQL client error", error);
+});
