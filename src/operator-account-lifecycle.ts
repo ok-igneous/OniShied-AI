@@ -101,12 +101,18 @@ export class OperatorAccountLifecycle {
     const email = normalizeEmail(input.email);
     const displayName = input.displayName.trim();
     if (displayName.length < 1 || displayName.length > 120) throw new Error("Invalid display name");
+    const sessionHash = hashOperatorSessionToken(sessionToken);
+    const principal = await this.database.query<{ role: string }>(
+      "SELECT * FROM onishield.resolve_operator_session($1)", [sessionHash]
+    );
+    if (!principal.rows[0]) throw new Error("unauthorized");
+    if (!["owner", "admin"].includes(principal.rows[0].role)) throw new Error("Forbidden operator invitation");
     await this.rateLimit(email, ip, 20);
     const token = this.newToken();
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const result = await this.database.query<{ action_id: string; recipient_email: string }>(
       "SELECT * FROM onishield.create_operator_invitation($1,$2,$3,$4,$5,$6)",
-      [hashOperatorSessionToken(sessionToken), email, displayName, input.role, token.digest, expiresAt]
+      [sessionHash, email, displayName, input.role, token.digest, expiresAt]
     );
     const row = result.rows[0];
     if (!row) throw new Error("Invitation could not be created");
