@@ -79,7 +79,7 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/operator_identity_smoke.sql
 
-      - name: Enforce source-file size limit
+      - name: Verify authentication throttling and operator-attributed review audit\n        env:\n          PGPASSWORD: postgres\n        run: |\n          psql -h 127.0.0.1 -U postgres -d onishield_lab \\\n            -v ON_ERROR_STOP=1 -f database/tests/operator_auth_security_smoke.sql\n\n      - name: Enforce source-file size limit
         run: npm run check:lines
 
       - name: Run schema tests
