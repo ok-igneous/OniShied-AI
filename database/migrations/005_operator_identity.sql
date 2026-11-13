@@ -1,4 +1,5 @@
 -- Operator identity schema and narrowly scoped authentication functions.
+-- Auth functions are granted only to the separate onishield_auth login role.
 CREATE TABLE onishield.operators (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT NOT NULL,
   password_hash TEXT NOT NULL,
@@ -70,10 +71,10 @@ REVOKE ALL ON FUNCTION onishield.lookup_operator_credentials(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.create_operator_session(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.resolve_operator_session(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.revoke_operator_session(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION onishield.lookup_operator_credentials(TEXT) TO onishield_app;
-GRANT EXECUTE ON FUNCTION onishield.create_operator_session(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) TO onishield_app;
-GRANT EXECUTE ON FUNCTION onishield.resolve_operator_session(TEXT) TO onishield_app;
-GRANT EXECUTE ON FUNCTION onishield.revoke_operator_session(TEXT) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.lookup_operator_credentials(TEXT) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.create_operator_session(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.resolve_operator_session(TEXT) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.revoke_operator_session(TEXT) TO onishield_auth;
 
 CREATE FUNCTION onishield.lookup_operator_membership(p_operator_id UUID,p_tenant_id TEXT)
 RETURNS TABLE(membership_id BIGINT,role TEXT)
@@ -84,4 +85,4 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,onishield AS $$
  AND m.status='active' AND o.status='active' LIMIT 1
 $$;
 REVOKE ALL ON FUNCTION onishield.lookup_operator_membership(UUID,TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION onishield.lookup_operator_membership(UUID,TEXT) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.lookup_operator_membership(UUID,TEXT) TO onishield_auth;
