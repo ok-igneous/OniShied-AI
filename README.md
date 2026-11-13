@@ -67,6 +67,7 @@ A repeatable end-to-end workflow is more valuable than a broad dashboard mock-up
 - `docs/BACKUP_AND_RECOVERY.md` — backup and recovery contract.
 - `docs/DEVELOPMENT_ROADMAP.md` — staged implementation plan.
 - `docs/IMPLEMENTATION_STATUS.md` — implemented code, unverified work and blockers.
+- `docs/REPOSITORY_CAPABILITY_AUDIT.md` — static repository audit, capability matrix, CI evidence and prioritized engineering gaps.
 - `docs/DEMO_RUNBOOK.md` — controlled demonstration plan.
 - `docs/TEAM_ROLES.md` — contributor responsibilities.
 - `CONTRIBUTING.md` — development workflow.
