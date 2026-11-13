@@ -17,7 +17,7 @@
 - PostgreSQL smoke tests for event RLS, threat-intelligence RLS, reviewer authorization/audit controls, and operator identity permissions.
 - Operator identity and tenant-membership schema; scrypt password verification, opaque session tokens, dedicated auth database role/pool, narrow SECURITY DEFINER credential/session functions, tenant-bound session validation/revocation, and deny-by-default role/action authorization bound to a validated session.
 - Operator-auth service unit tests for successful login, wrong password, inactive account, missing tenant membership, token digest handling, logout, session-bound authorization, persistent throttle enforcement, and authenticated review attribution.
-- PostgreSQL-backed login throttling by hashed email and source IP (five attempts per 15 minutes, then a 15-minute lock), plus a database smoke test.
+- PostgreSQL-backed login throttling by HMAC-keyed email and source IP (five attempts per 15 minutes, then a 15-minute lock), plus a database smoke test.
 - Loopback-only operator login, session introspection, logout, and threat-indicator review API routes. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
 - CI workflow configured to provision PostgreSQL, apply migrations, execute database smoke tests, run unit tests, type-check, and build.
