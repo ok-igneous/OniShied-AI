@@ -74,7 +74,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h 127.0.0.1 -U postgres -d onishield_lab \\
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/operator_identity_smoke.sql
 
       - name: Enforce source-file size limit
