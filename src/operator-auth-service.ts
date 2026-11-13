@@ -6,6 +6,10 @@ import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPassw
 
 export interface OperatorPrincipal { tenantId: string; operatorId: string; membershipId: string; email: string; displayName: string; role: string; }
 export interface OperatorLoginResult { token: string; expiresAt: string; principal: OperatorPrincipal; }
+export interface OperatorSessionInfo {
+  sessionId: string; createdAt: string; expiresAt: string;
+  lastSeenAt: string; revokedAt: string | null; current: boolean;
+}
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -92,6 +96,48 @@ export class OperatorAuthService {
     if (!principal) throw new Error("unauthorized");
     assertOperatorPermission(principal.role, action);
     return principal;
+  }
+
+  async rotate(token: string): Promise<OperatorLoginResult> {
+    const currentHash = hashOperatorSessionToken(token);
+    const replacementToken = createOperatorSessionToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    const rotated = await this.database.query(
+      "SELECT * FROM onishield.rotate_operator_session($1,$2,$3)",
+      [currentHash, hashOperatorSessionToken(replacementToken), expiresAt]
+    );
+    if (rotated.rowCount !== 1) throw new Error("Session rotation failed");
+    const principal = await this.resolve(replacementToken);
+    if (!principal) throw new Error("Rotated session could not be validated");
+    return { token: replacementToken, expiresAt: expiresAt.toISOString(), principal };
+  }
+
+  async listSessions(token: string): Promise<OperatorSessionInfo[]> {
+    const tokenHash = hashOperatorSessionToken(token);
+    const result = await this.database.query<{
+      session_id: string; created_at: Date | string; expires_at: Date | string;
+      last_seen_at: Date | string; revoked_at: Date | string | null; is_current: boolean;
+    }>("SELECT * FROM onishield.list_operator_sessions($1)", [tokenHash]);
+    return result.rows.map((row) => ({
+      sessionId: row.session_id,
+      createdAt: new Date(row.created_at).toISOString(),
+      expiresAt: new Date(row.expires_at).toISOString(),
+      lastSeenAt: new Date(row.last_seen_at).toISOString(),
+      revokedAt: row.revoked_at ? new Date(row.revoked_at).toISOString() : null,
+      current: row.is_current
+    }));
+  }
+
+  async revokeOtherSession(token: string, sessionId: string): Promise<boolean> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) {
+      throw new Error("Invalid session ID");
+    }
+    const tokenHash = hashOperatorSessionToken(token);
+    const result = await this.database.query<{ revoked: boolean }>(
+      "SELECT onishield.revoke_operator_session_by_id($1,$2) AS revoked",
+      [tokenHash, sessionId]
+    );
+    return result.rows[0]?.revoked === true;
   }
 
   async reviewThreatIndicator(
