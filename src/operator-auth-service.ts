@@ -84,6 +84,38 @@ export class OperatorAuthService {
     return principal;
   }
 
+  async reviewThreatIndicator(
+    token: string,
+    indicatorId: number,
+    newStatus: "active" | "rejected" | "revoked" | "expired",
+    reason: string
+  ): Promise<{indicatorId:number;oldStatus:string;newStatus:string;actorOperatorId:string;changedAt:string}> {
+    const principal = await this.authorize(token, "threat-intelligence:review");
+    if (!Number.isSafeInteger(indicatorId) || indicatorId < 1 ||
+        reason.trim().length < 10 || reason.length > 1000) {
+      throw new Error("Invalid review request");
+    }
+    const tokenHash = hashOperatorSessionToken(token);
+    const result = await this.database.query<{
+      indicator_id:string;old_status:string;new_status:string;
+      actor_operator_id:string;changed_at:Date|string
+    }>(
+      "SELECT * FROM onishield.review_threat_indicator($1,$2,$3,$4)",
+      [tokenHash, indicatorId, newStatus, reason]
+    );
+    const row = result.rows[0];
+    if (!row || row.actor_operator_id !== principal.operatorId) {
+      throw new Error("Threat indicator review failed");
+    }
+    return {
+      indicatorId: Number(row.indicator_id),
+      oldStatus: row.old_status,
+      newStatus: row.new_status,
+      actorOperatorId: row.actor_operator_id,
+      changedAt: new Date(row.changed_at).toISOString()
+    };
+  }
+
   async logout(token: string): Promise<void> {
     let tokenHash: string;
     try { tokenHash = hashOperatorSessionToken(token); } catch { return; }
