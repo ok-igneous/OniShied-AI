@@ -37,6 +37,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
     }
     if (sql.includes("create_operator_session")) return { rows: [{ session_id: "session-id" }] };
     if (sql.includes("resolve_operator_session")) return { rows: [principalRow] };
+    if (sql.includes("reset_operator_login_limit")) return { rows: [] };
     throw new Error("Unexpected query");
   });
 
