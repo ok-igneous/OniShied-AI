@@ -33,10 +33,29 @@ FROM onishield.operators o
 JOIN onishield.operator_memberships m ON m.operator_id=o.id
 WHERE o.email='reviewer@example.test';
 
+INSERT INTO onishield.operators(id,email,password_hash,display_name,status)
+VALUES ('10000000-0000-4000-8000-000000000002','viewer@example.test',
+        'test-only-not-a-real-password-hash','Test Viewer','active');
+INSERT INTO onishield.operator_memberships(tenant_id,operator_id,role,status)
+VALUES ('auth-review-tenant','10000000-0000-4000-8000-000000000002','viewer','active');
+INSERT INTO onishield.operator_sessions
+  (tenant_id,operator_id,membership_id,token_hash,expires_at)
+SELECT 'auth-review-tenant',o.id,m.id,
+       repeat('d',64),NOW()+INTERVAL '1 hour'
+FROM onishield.operators o
+JOIN onishield.operator_memberships m ON m.operator_id=o.id
+WHERE o.email='viewer@example.test';
+
 SET LOCAL ROLE onishield_auth;
 DO $$
 DECLARE attempt INTEGER; permitted BOOLEAN;
 BEGIN
+  IF has_table_privilege(current_user,'onishield.operators','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_sessions','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_memberships','SELECT') THEN
+    RAISE EXCEPTION 'Auth service role unexpectedly has direct identity-table access';
+  END IF;
+
   FOR attempt IN 1..5 LOOP
     SELECT allowed INTO permitted
       FROM onishield.consume_operator_login_limit(repeat('b',64),5,900,900);
@@ -53,6 +72,26 @@ BEGIN
     'active',
     'Verified synthetic source provenance.'
   );
+
+  BEGIN
+    PERFORM * FROM onishield.review_threat_indicator(
+      repeat('c',64), current_setting('app.test_indicator_id')::BIGINT,
+      'revoked', 'Invalid session must never review.'
+    );
+    RAISE EXCEPTION 'Review accepted an invalid session';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Review accepted an invalid session' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM * FROM onishield.review_threat_indicator(
+      repeat('d',64), current_setting('app.test_indicator_id')::BIGINT,
+      'revoked', 'Viewer role must not review indicators.'
+    );
+    RAISE EXCEPTION 'Review accepted a viewer session';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Review accepted a viewer session' THEN RAISE; END IF;
+  END;
 END
 $$;
 
