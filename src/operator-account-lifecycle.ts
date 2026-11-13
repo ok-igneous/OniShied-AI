@@ -47,11 +47,11 @@ export class OperatorAccountLifecycle {
       .update(`onishield:operator-email-action:${scope}:${value}`).digest("hex");
   }
 
-  private async rateLimit(email: string, ip: string): Promise<void> {
+  private async rateLimit(email: string, ip: string, maxAttempts = 5): Promise<void> {
     const keys = [this.bucket("email", email), this.bucket("ip", ip)];
     const results = await Promise.all(keys.map((key) =>
       this.database.query<{ allowed: boolean; retry_after_seconds: number }>(
-        "SELECT * FROM onishield.consume_operator_login_limit($1,5,900,900)", [key]
+        "SELECT * FROM onishield.consume_operator_login_limit($1,$2,900,900)", [key, maxAttempts]
       )
     ));
     const blocked = results.map((result) => result.rows[0])
@@ -96,11 +96,12 @@ export class OperatorAccountLifecycle {
   }
 
   async createInvitation(
-    sessionToken: string, input: { email: string; displayName: string; role: InviteRole }
+    sessionToken: string, input: { email: string; displayName: string; role: InviteRole }, ip: string
   ): Promise<void> {
     const email = normalizeEmail(input.email);
     const displayName = input.displayName.trim();
     if (displayName.length < 1 || displayName.length > 120) throw new Error("Invalid display name");
+    await this.rateLimit(email, ip, 20);
     const token = this.newToken();
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const result = await this.database.query<{ action_id: string; recipient_email: string }>(
@@ -142,8 +143,10 @@ export class OperatorAccountLifecycle {
     }
   }
 
-  async acceptInvitation(rawToken: string, password: string): Promise<{ email: string; displayName: string; tenantId: string; role: string }> {
+  async acceptInvitation(rawToken: string, password: string, ip: string): Promise<{ email: string; displayName: string; tenantId: string; role: string }> {
+    if (password.length < 12 || password.length > 256) throw new Error("Password must contain between 12 and 256 characters");
     const token = this.tokenDigest(rawToken);
+    await this.rateLimit(`action:${token}`, ip);
     const passwordHash = await hashOperatorPassword(password);
     const result = await this.database.query<{
       email: string; display_name: string; tenant_id: string; role: string;
@@ -153,19 +156,24 @@ export class OperatorAccountLifecycle {
     return { email: row.email, displayName: row.display_name, tenantId: row.tenant_id, role: row.role };
   }
 
-  async verifyEmail(rawToken: string): Promise<boolean> {
+  async verifyEmail(rawToken: string, ip: string): Promise<boolean> {
+    const token = this.tokenDigest(rawToken);
+    await this.rateLimit(`action:${token}`, ip);
     const result = await this.database.query<{ verified: boolean }>(
       "SELECT onishield.consume_operator_email_verification($1) AS verified",
-      [this.tokenDigest(rawToken)]
+      [token]
     );
     return result.rows[0]?.verified === true;
   }
 
-  async resetPassword(rawToken: string, password: string): Promise<boolean> {
+  async resetPassword(rawToken: string, password: string, ip: string): Promise<boolean> {
+    if (password.length < 12 || password.length > 256) throw new Error("Password must contain between 12 and 256 characters");
+    const token = this.tokenDigest(rawToken);
+    await this.rateLimit(`action:${token}`, ip);
     const passwordHash = await hashOperatorPassword(password);
     const result = await this.database.query<{ reset: boolean }>(
       "SELECT onishield.consume_operator_password_reset($1,$2) AS reset",
-      [this.tokenDigest(rawToken), passwordHash]
+      [token, passwordHash]
     );
     return result.rows[0]?.reset === true;
   }
