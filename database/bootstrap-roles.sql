@@ -8,7 +8,9 @@
 CREATE ROLE onishield_owner NOLOGIN;
 CREATE ROLE onishield_migrator LOGIN PASSWORD :'migrator_password';
 CREATE ROLE onishield_app LOGIN PASSWORD :'app_password';
+CREATE ROLE onishield_reviewer NOLOGIN;
 
 GRANT onishield_owner TO onishield_migrator;
+GRANT onishield_reviewer TO onishield_migrator;
 
 CREATE DATABASE onishield_lab OWNER onishield_owner;
