@@ -102,6 +102,11 @@ CREATE POLICY threat_indicators_owner_review_update
   USING (tenant_id = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+CREATE POLICY threat_indicator_audit_owner_read
+  ON onishield.threat_indicator_status_audit
+  FOR SELECT TO onishield_owner
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
 CREATE OR REPLACE FUNCTION onishield.audit_threat_indicator_status_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
