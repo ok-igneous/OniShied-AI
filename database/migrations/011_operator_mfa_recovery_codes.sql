@@ -57,7 +57,7 @@ BEGIN
   IF NOT FOUND THEN RETURN FALSE; END IF;
 
   INSERT INTO onishield.operator_mfa_recovery_codes(operator_id,code_hash)
-    SELECT trusted.operator_id,value FROM unnest(p_recovery_hashes) AS value;
+    SELECT trusted.operator_id,value FROM unnest(p_recovery_hashes) AS hashes(value);
   INSERT INTO onishield.operator_mfa_audit(operator_id,action)
     VALUES(trusted.operator_id,'enabled'),(trusted.operator_id,'recovery_codes_issued');
   RETURN TRUE;
