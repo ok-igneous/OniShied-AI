@@ -21,6 +21,8 @@ This roadmap is staged. Each phase has a measurable exit gate; do not move forwa
 **Exit gate:** repeatable ingestion of valid events and safe rejection of invalid events.
 
 ## Phase 2 — Detection and triage
+
+Design artefacts: [initial detection scenario catalogue](DETECTION_SCENARIOS.md). This is a specification, not an implemented detector.
 - [ ] Implement a small deterministic detection rule set.
 - [ ] Link findings to source event identifiers.
 - [ ] Add severity rubric and confidence semantics.
@@ -55,6 +57,8 @@ This roadmap is staged. Each phase has a measurable exit gate; do not move forwa
 **Exit gate:** a reviewer can operate and understand the demonstrator without developer intervention.
 
 ## Phase 6 — Hardening and competition readiness
+
+Demonstration planning: [controlled demonstration runbook](DEMO_RUNBOOK.md). This is a planned sequence; only verified capabilities may be presented as working.
 - [ ] Threat-model review and security test report.
 - [ ] Reproducible deployment and demo scripts.
 - [ ] Performance and failure-mode measurements.
