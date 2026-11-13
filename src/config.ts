@@ -6,6 +6,7 @@ const configSchema = z.object({
   APP_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1),
   AUTH_DATABASE_URL: z.string().min(1).optional(),
+  AUTH_RATE_LIMIT_SECRET: z.string().min(32).optional(),
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
   LAB_CONNECTOR_ID: z.string().min(1).max(128),
   LAB_CONNECTOR_TOKEN: z.string().min(32),
@@ -21,6 +22,10 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration: ${details}`);
 }
 
+if (parsed.data.AUTH_DATABASE_URL && !parsed.data.AUTH_RATE_LIMIT_SECRET) {
+  throw new Error("AUTH_RATE_LIMIT_SECRET is required when AUTH_DATABASE_URL is configured");
+}
+
 if (parsed.data.APP_ENV === "production" && parsed.data.DATABASE_SSL !== "true") {
   throw new Error("DATABASE_SSL=true is required in production");
 }
@@ -30,6 +35,7 @@ export const config = {
   port: parsed.data.APP_PORT,
   databaseUrl: parsed.data.DATABASE_URL,
   authDatabaseUrl: parsed.data.AUTH_DATABASE_URL,
+  authRateLimitSecret: parsed.data.AUTH_RATE_LIMIT_SECRET,
   databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
