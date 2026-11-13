@@ -17,7 +17,7 @@ indicator_row AS (
      source_id, source_record_ref, confidence, confidence_rubric_version,
      assessed_by, status, tlp)
   SELECT tenant_id, 'synthetic-indicator-1', 1, 'ipv4', '192.0.2.44',
-         id, 'fixture-1', 80, 'test-v1', 'test-reviewer', 'active', 'green'
+         id, 'fixture-1', 80, 'test-v1', 'test-reviewer', 'pending', 'green'
     FROM source_row
   RETURNING tenant_id, id, version
 )
