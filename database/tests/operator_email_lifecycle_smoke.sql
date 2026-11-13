@@ -19,6 +19,7 @@ WHERE tenant_id='email-test-tenant'
 SET LOCAL ROLE onishield_auth;
 DO $$
 DECLARE invited RECORD;
+  accepted RECORD;
   verified BOOLEAN;
   reset BOOLEAN;
   invite_hash TEXT:=repeat('b',64);
@@ -32,10 +33,15 @@ BEGIN
   );
   IF invited.action_id IS NULL THEN RAISE EXCEPTION 'Invitation was not created'; END IF;
 
-  IF NOT EXISTS(SELECT 1 FROM onishield.accept_operator_invitation(invite_hash,password_hash)
-    WHERE email='new-operator@example.test' AND role='security_analyst') THEN
+  SELECT * INTO accepted FROM onishield.accept_operator_invitation(invite_hash,password_hash);
+  IF accepted.email IS DISTINCT FROM 'new-operator@example.test'
+    OR accepted.role IS DISTINCT FROM 'security_analyst' THEN
     RAISE EXCEPTION 'Invitation acceptance failed';
   END IF;
+  PERFORM * FROM onishield.create_operator_session(
+    repeat('e',64),accepted.tenant_id,accepted.operator_id,accepted.membership_id,
+    NOW()+INTERVAL '1 hour'
+  );
   BEGIN
     PERFORM * FROM onishield.accept_operator_invitation(invite_hash,password_hash);
     RAISE EXCEPTION 'Invitation token was reusable';
@@ -50,6 +56,9 @@ BEGIN
   IF reset IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'Password reset was not consumed'; END IF;
   SELECT onishield.consume_operator_password_reset(reset_hash,password_hash) INTO reset;
   IF reset IS DISTINCT FROM FALSE THEN RAISE EXCEPTION 'Password reset token was reusable'; END IF;
+  IF EXISTS(SELECT 1 FROM onishield.resolve_operator_session(repeat('e',64))) THEN
+    RAISE EXCEPTION 'Password reset did not revoke existing sessions';
+  END IF;
 END;
 $$;
 
