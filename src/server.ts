@@ -7,8 +7,8 @@ import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-aut
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
-const operatorAuth = authPool && config.authRateLimitSecret
-  ? new OperatorAuthService(authPool, config.authRateLimitSecret)
+const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey
+  ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey)
   : null;
 const operatorLoginSchema = z.object({
   email: z.string().min(3).max(254),
@@ -45,6 +45,7 @@ app.post("/v1/operator/login", async (request, reply) => {
     );
     reply.header("cache-control", "no-store");
     reply.header("pragma", "no-cache");
+    if ("mfaRequired" in result) return reply.code(200).send(result);
     return reply.code(200).send(result);
   } catch (error) {
     if (error instanceof OperatorLoginRateLimitError) {
@@ -56,6 +57,31 @@ app.post("/v1/operator/login", async (request, reply) => {
     }
     request.log.error({ err: error }, "Operator login unavailable");
     return reply.code(503).send({ error: "operator_auth_unavailable" });
+  }
+});
+
+app.post("/v1/operator/login/verify", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+  const parsed = z.object({
+    challengeToken:z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    code:z.string().regex(/^\\d{6}$/)
+  }).strict().safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error:"invalid_mfa_challenge" });
+  try {
+    const session = await operatorAuth.completeMfaLogin(parsed.data.challengeToken,parsed.data.code);
+    reply.header("cache-control","no-store");
+    reply.header("pragma","no-cache");
+    return { session };
+  } catch (error) {
+    if (error instanceof OperatorLoginRateLimitError) {
+      reply.header("retry-after",String(error.retryAfterSeconds));
+      return reply.code(429).send({error:"too_many_mfa_attempts"});
+    }
+    if (error instanceof Error && /Invalid MFA|replayed MFA/.test(error.message)) {
+      return reply.code(401).send({error:"invalid_mfa_challenge"});
+    }
+    request.log.error({err:error},"MFA login verification unavailable");
+    return reply.code(503).send({error:"operator_auth_unavailable"});
   }
 });
 
@@ -150,11 +176,11 @@ app.delete<{ Params: { sessionId: string } }>(
 app.post("/v1/operator/step-up", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
   const token = operatorBearer(request.headers.authorization);
-  const parsed = z.object({password:z.string().min(1).max(256)}).strict().safeParse(request.body);
+  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^\\d{6}$/).optional()}).strict().safeParse(request.body);
   if (!token) return reply.code(401).send({ error: "unauthorized" });
   if (!parsed.success) return reply.code(400).send({ error: "invalid_step_up_request" });
   try {
-    const result = await operatorAuth.stepUp(token, parsed.data.password);
+    const result = await operatorAuth.stepUp(token, parsed.data.password, parsed.data.code);
     reply.header("cache-control", "no-store");
     reply.header("pragma", "no-cache");
     return { stepUp: result };
@@ -166,11 +192,72 @@ app.post("/v1/operator/step-up", async (request, reply) => {
     if (error instanceof Error && error.message === "unauthorized") {
       return reply.code(401).send({ error: "unauthorized" });
     }
-    if (error instanceof Error && error.message === "Invalid step-up credentials") {
+    if (error instanceof Error && (error.message === "Invalid step-up credentials" || error.message === "MFA code required")) {
       return reply.code(401).send({ error: "invalid_step_up_credentials" });
     }
     request.log.error({ err: error }, "Operator step-up unavailable");
     return reply.code(503).send({ error: "operator_auth_unavailable" });
+  }
+});
+
+app.post("/v1/operator/mfa/enroll", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
+  const token = operatorBearer(request.headers.authorization);
+  if (!token) return reply.code(401).send({error:"unauthorized"});
+  try {
+    const enrollment = await operatorAuth.beginMfaEnrollment(token);
+    reply.header("cache-control","no-store");
+    reply.header("pragma","no-cache");
+    return { enrollment };
+  } catch (error) {
+    if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({error:"unauthorized"});
+    if (error instanceof Error && error.message === "Recent password step-up required") return reply.code(428).send({error:"step_up_required"});
+    request.log.error({err:error},"MFA enrollment unavailable");
+    return reply.code(503).send({error:"operator_auth_unavailable"});
+  }
+});
+
+app.post("/v1/operator/mfa/confirm", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
+  const token = operatorBearer(request.headers.authorization);
+  const parsed = z.object({code:z.string().regex(/^\\d{6}$/)}).strict().safeParse(request.body);
+  if (!token) return reply.code(401).send({error:"unauthorized"});
+  if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_code"});
+  try {
+    await operatorAuth.confirmMfaEnrollment(token,parsed.data.code);
+    reply.header("cache-control","no-store");
+    return reply.code(200).send({mfaEnabled:true});
+  } catch (error) {
+    if (error instanceof OperatorLoginRateLimitError) {
+      reply.header("retry-after",String(error.retryAfterSeconds));
+      return reply.code(429).send({error:"too_many_mfa_attempts"});
+    }
+    if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({error:"unauthorized"});
+    if (error instanceof Error && /Invalid MFA code|MFA enrollment/.test(error.message)) return reply.code(400).send({error:"invalid_mfa_enrollment"});
+    request.log.error({err:error},"MFA enrollment confirmation unavailable");
+    return reply.code(503).send({error:"operator_auth_unavailable"});
+  }
+});
+
+app.delete("/v1/operator/mfa", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
+  const token = operatorBearer(request.headers.authorization);
+  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^\\d{6}$/)}).strict().safeParse(request.body);
+  if (!token) return reply.code(401).send({error:"unauthorized"});
+  if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_disable_request"});
+  try {
+    await operatorAuth.disableMfa(token,parsed.data.password,parsed.data.code);
+    reply.header("cache-control","no-store");
+    return reply.code(200).send({mfaEnabled:false});
+  } catch (error) {
+    if (error instanceof OperatorLoginRateLimitError) {
+      reply.header("retry-after",String(error.retryAfterSeconds));
+      return reply.code(429).send({error:"too_many_mfa_attempts"});
+    }
+    if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({error:"unauthorized"});
+    if (error instanceof Error && /Invalid step-up credentials|MFA code required/.test(error.message)) return reply.code(401).send({error:"invalid_mfa_credentials"});
+    request.log.error({err:error},"MFA disable unavailable");
+    return reply.code(503).send({error:"operator_auth_unavailable"});
   }
 });
 
