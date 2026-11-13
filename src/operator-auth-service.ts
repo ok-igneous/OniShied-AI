@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { decryptMfaSecret, encryptMfaSecret } from "./operator-mfa-crypto.js";
-import { encodeBase32, generateTotpSecret, verifyTotp } from "./operator-mfa-totp.js";
+import { generateTotpSecret, verifyTotp } from "./operator-mfa-totp.js";
 import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
