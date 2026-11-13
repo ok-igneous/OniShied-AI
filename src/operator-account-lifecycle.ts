@@ -121,7 +121,10 @@ export class OperatorAccountLifecycle {
       [email, token.digest, new Date(Date.now() + 30 * 60 * 1000)]
     );
     const row = result.rows[0];
-    if (row) await this.sendAction(row.recipient_email, row.action_id, "verification", token.raw);
+    if (row) {
+      try { await this.sendAction(row.recipient_email, row.action_id, "verification", token.raw); }
+      catch { /* Keep account-existence and provider status indistinguishable to callers. */ }
+    }
   }
 
   async requestPasswordReset(emailInput: string, ip: string): Promise<void> {
@@ -133,7 +136,10 @@ export class OperatorAccountLifecycle {
       [email, token.digest, new Date(Date.now() + 30 * 60 * 1000)]
     );
     const row = result.rows[0];
-    if (row) await this.sendAction(row.recipient_email, row.action_id, "password-reset", token.raw);
+    if (row) {
+      try { await this.sendAction(row.recipient_email, row.action_id, "password-reset", token.raw); }
+      catch { /* Keep account-existence and provider status indistinguishable to callers. */ }
+    }
   }
 
   async acceptInvitation(rawToken: string, password: string): Promise<{ email: string; displayName: string; tenantId: string; role: string }> {
