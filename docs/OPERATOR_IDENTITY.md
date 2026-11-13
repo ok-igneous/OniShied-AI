@@ -23,7 +23,8 @@
 - Login attempts are rate-limited in PostgreSQL by HMAC-keyed account and source-IP buckets: five attempts per 15-minute account window and 30 attempts per 15-minute source-IP window, each followed by a 15-minute lock. The account bucket resets after a successful login; the IP bucket ages out naturally. `AUTH_RATE_LIMIT_SECRET` is mandatory whenever `AUTH_DATABASE_URL` is set, preventing offline email/IP guessing from a database-only leak.
 - `POST /v1/operator/login`, `GET /v1/operator/me`, `POST /v1/operator/logout`, `POST /v1/operator/rotate`, `GET /v1/operator/sessions`, and `DELETE /v1/operator/sessions/:sessionId` are exposed only by the current loopback-bound Fastify process. Login and rotation responses are marked `Cache-Control: no-store` and use bearer tokens, not cookies.
 - Session rotation is atomic in PostgreSQL: the current token is row-locked, revoked, and replaced in the same transaction. Privileged review and other-session revocation also row-lock the authorizing session so a completed revocation cannot race through an already-started privileged action. The API lists at most 50 session metadata records for the authenticated operator in the active tenant; it never returns token digests. An operator may revoke another session belonging to the same operator and tenant, but cannot revoke the session used to authorize that request.
-- `POST /v1/threat-intelligence/:indicatorId/review` requires a validated session and review permission. PostgreSQL revalidates the session and tenant, derives the operator ID from the stored session, performs the state transition, and writes that operator UUID into the append-only audit record.
+- `POST /v1/operator/step-up` re-verifies the current operator password, with a separate five-attempt/15-minute HMAC-keyed throttle, and marks only that validated session as stepped up for five minutes. The database checks the timestamp while holding the session row lock.
+- `POST /v1/threat-intelligence/:indicatorId/review` requires a validated session, review permission, and step-up completed within the preceding five minutes. PostgreSQL independently revalidates the session and step-up timestamp, derives the operator ID from the stored session, performs the state transition, and writes that operator UUID into the append-only audit record.
 - Unit tests cover normalized login, wrong passwords, inactive accounts, absent tenant membership, session token hashing, logout, and session-bound authorization.
 - Permission checks use a server-defined role/action map and deny unknown roles/actions. The auth service resolves the opaque session first, then authorizes the requested action from the persisted membership role; callers cannot supply a trusted role.
 
@@ -36,6 +37,7 @@ The routes are available only when both `AUTH_DATABASE_URL` (the dedicated `onis
 - `POST /v1/operator/login` accepts JSON `{ "email": "...", "password": "...", "tenantId": "..." }`. A successful response contains an opaque bearer token, its expiry, and the resolved principal.
 - `GET /v1/operator/me` accepts `Authorization: Bearer <token>` and returns the current principal.
 - `POST /v1/operator/logout` accepts the same bearer header and revokes the session.
+- `POST /v1/operator/step-up` accepts `Authorization: Bearer <token>` and JSON `{ "password": "..." }`; successful reauthentication authorizes sensitive review for five minutes.
 - `POST /v1/threat-intelligence/:indicatorId/review` accepts `{ "status": "active|rejected|revoked|expired", "reason": "..." }` and requires the bearer token. Tenant and actor identity are derived from the session, never from the request body.
 
 Example login request:
@@ -53,8 +55,8 @@ The example is a contract illustration only; no seeded production operator or pa
 
 - The current server binds to `127.0.0.1`; these endpoints are for the controlled local lab only. Do not expose them through a reverse proxy, public interface, or mobile network.
 - The bearer token must be kept in process memory by a local client and never written to logs, URLs, browser local storage, or analytics. The API does not issue cookies, so cookie-based CSRF is not used.
-- Before remote/browser/mobile deployment, implement TLS termination, origin/CORS policy, secure platform token storage, session rotation, step-up authentication for privileged actions, and operational monitoring.
-- Account invitation, email verification, password recovery, session device labels, and step-up authentication remain unimplemented. Session inventory, rotation, and revocation are implemented; device fingerprinting is deliberately not inferred from untrusted user-agent strings.
+- Before remote/browser/mobile deployment, implement TLS termination, strict origin/CORS policy, secure platform token storage, deployment-specific abuse controls, and operational monitoring. The present API is intentionally loopback-only.
+- Account invitation, email verification, password recovery, MFA/TOTP, session device labels, and step-up for actions other than threat-indicator review remain unimplemented. Session inventory, rotation, revocation, and password reauthentication for threat-indicator review are implemented; device fingerprinting is deliberately not inferred from untrusted user-agent strings.
 - Rate-limit buckets are hashed before persistence; raw email addresses and IP addresses are not stored in the throttle table. Add scheduled cleanup/retention for old buckets before a long-running deployment.
 - The existing lab connector endpoint remains separate and does not authenticate human operators.
 
@@ -69,8 +71,8 @@ The example is a contract illustration only; no seeded production operator or pa
 
 ## Release gates
 
-1. Verify migrations 006–008, login throttle behavior, session rotation/inventory/revocation, serialized review-versus-revocation behavior, review audit attribution, and all prior PostgreSQL/RLS smoke tests in a successful CI run.
-2. Add invitation, email verification, recovery, session rotation, and device/session management.
+1. Verify migrations 006–009, login and step-up throttling, five-minute review step-up expiry, session rotation/inventory/revocation, serialized review-versus-revocation behavior, review audit attribution, and all prior PostgreSQL/RLS smoke tests in a successful CI run.
+2. Add invitation, email verification, password recovery, MFA/TOTP, session device labels, and throttle-bucket cleanup scheduling.
 3. Design and security-review remote browser/mobile token transport, TLS, origin policy, secure storage, and step-up authentication.
 4. Replace shared lab reviewer DB identity with individually attributable reviewer accounts in the production operations model.
 5. Add throttle-bucket retention cleanup, monitoring, and abuse-response procedures.
