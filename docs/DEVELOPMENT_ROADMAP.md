@@ -31,6 +31,8 @@ Design artefacts: [initial detection scenario catalogue](DETECTION_SCENARIOS.md)
 **Exit gate:** deterministic findings with explainable evidence.
 
 ## Phase 3 — AI investigation
+
+Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [investigation engine](INVESTIGATION_ENGINE_CONTRACT.md). These are specifications, not implemented services.
 - [ ] Define structured investigation result schema.
 - [ ] Add read-only evidence retrieval tools.
 - [ ] Require event references for factual claims.
