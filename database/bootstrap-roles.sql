@@ -3,7 +3,7 @@
 -- never put real passwords in this file or in source control.
 -- Example:
 -- psql -v ON_ERROR_STOP=1 -v migrator_password="$MIGRATOR_DB_PASSWORD" \
---   -v app_password="$APP_DB_PASSWORD" -v auth_password="$AUTH_DB_PASSWORD" \\
+--   -v app_password="$APP_DB_PASSWORD" -v auth_password="$AUTH_DB_PASSWORD" \
 --   -f database/bootstrap-roles.sql
 
 CREATE ROLE onishield_owner NOLOGIN;
