@@ -74,6 +74,21 @@ BEGIN
   IF permitted THEN RAISE EXCEPTION 'Login throttle did not block the sixth attempt'; END IF;
   PERFORM onishield.reset_operator_login_limit(repeat('b',64));
 
+  BEGIN
+    PERFORM * FROM onishield.review_threat_indicator(
+      repeat('a',64), current_setting('app.test_indicator_id')::BIGINT,
+      'active', 'Must require fresh password reauthentication.'
+    );
+    RAISE EXCEPTION 'Review accepted without step-up authentication';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Review accepted without step-up authentication' THEN RAISE; END IF;
+    IF SQLERRM <> 'Step-up authentication required' THEN RAISE; END IF;
+  END;
+
+  IF NOT onishield.mark_operator_session_step_up(repeat('a',64)) THEN
+    RAISE EXCEPTION 'Valid operator session could not complete step-up';
+  END IF;
+
   PERFORM * FROM onishield.review_threat_indicator(
     repeat('a',64),
     current_setting('app.test_indicator_id')::BIGINT,
