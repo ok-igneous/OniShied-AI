@@ -297,3 +297,28 @@ test("enrolled reviewer step-up requires a fresh TOTP counter", async () => {
   assert.equal(mark?.params[0],hashOperatorSessionToken(token));
   assert.equal(typeof mark?.params[1],"number");
 });
+
+test("MFA enrollment reauthenticates password and stores only encrypted secret material", async () => {
+  const token = "A".repeat(43);
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const pendingSecret = generateTotpSecret();
+  const encrypted = encryptMfaSecret(pendingSecret,"ab".repeat(32));
+  const {database,calls} = fakeDatabase((sql) => {
+    if (sql.includes("resolve_operator_session")) return {rows:[{...principalRow,role:"reviewer"}]};
+    if (sql.includes("lookup_operator_credentials")) return {rows:[{password_hash:passwordHash,operator_status:"active"}]};
+    if (sql.includes("mark_operator_session_mfa_enrollment_step_up")) return {rows:[{marked:true}]};
+    if (sql.includes("store_pending_operator_mfa")) return {rows:[{stored:true}]};
+    if (sql.includes("get_pending_operator_mfa")) return {rows:[{ciphertext:encrypted.ciphertext,nonce:encrypted.nonce,auth_tag:encrypted.authTag}]};
+    if (sql.includes("activate_operator_mfa")) return {rows:[{activated:true}]};
+    return {rows:[]};
+  });
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  const enrollment = await service.beginMfaEnrollment(token,"correct horse battery staple");
+  assert.match(enrollment.secret,/^[A-Z2-7]{32}$/);
+  assert.ok(enrollment.otpauthUrl.startsWith("otpauth://totp/"));
+  const store = calls.find(call=>call.sql.includes("store_pending_operator_mfa"));
+  assert.ok(store);
+  assert.notDeepEqual(store.params[1],Buffer.from(enrollment.secret,"utf8"));
+  await service.confirmMfaEnrollment(token,generateTotpAt(pendingSecret,Date.now()));
+  assert.ok(calls.some(call=>call.sql.includes("activate_operator_mfa")));
+});
