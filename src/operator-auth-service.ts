@@ -131,6 +131,7 @@ export class OperatorAuthService {
       throw new Error("MFA session creation failed");
     }
     await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [bucket]);
+    await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [throttleKey(this.rateLimitSecret,"email",principal.email)]);
     return { token, expiresAt:expiresAt.toISOString(), principal };
   }
 
