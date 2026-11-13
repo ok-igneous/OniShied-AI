@@ -35,6 +35,7 @@ export function registerOperatorAccountRoutes(
       reply.header("cache-control", "no-store");
       return reply.code(202).send({ status: "invitation_sent" });
     } catch (error) {
+      if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({ error: "unauthorized" });
       if (error instanceof Error && /rate limited/.test(error.message)) return reply.code(429).send({ error: "too_many_requests" });
       if (error instanceof Error && /Forbidden/.test(error.message)) {
         return reply.code(403).send({ error: "forbidden" });
