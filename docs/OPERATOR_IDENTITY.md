@@ -51,6 +51,14 @@
 
 Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_auth. The general onishield_app role has no execute grants on these functions. They require dedicated PostgreSQL security review before production.
 
+## Account lifecycle API contract
+
+- `POST /v1/operator/invitations` requires a bearer session and accepts `{ "email": "...", "displayName": "...", "role": "security_analyst" }`. Only owners/admins can invite; database policy enforces role limits.
+- `POST /v1/operator/invitations/accept` accepts `{ "token": "...", "password": "..." }`. Passwords must be 12–256 characters. Successful acceptance creates the operator and tenant membership atomically.
+- `POST /v1/operator/email/verification/request` accepts `{ "email": "..." }`; `POST /v1/operator/email/verification/confirm` accepts `{ "token": "..." }`.
+- `POST /v1/operator/password-reset/request` accepts `{ "email": "..." }`; `POST /v1/operator/password-reset/confirm` accepts `{ "token": "...", "password": "..." }`. A successful reset revokes all active sessions.
+- The request endpoints return generic `202` responses. They reduce direct account enumeration, but synchronous provider delivery can still create timing differences; a durable asynchronous email outbox is a production hardening task.
+
 ## Local API contract
 
 The routes are available only when `AUTH_DATABASE_URL` (the dedicated `onishield_auth` login), a separate random `AUTH_RATE_LIMIT_SECRET` of at least 32 characters, `MFA_ENCRYPTION_KEY` (exactly 32 random bytes encoded as 64 hex characters), and a separate random `MFA_RECOVERY_PEPPER` of at least 32 characters are configured.
