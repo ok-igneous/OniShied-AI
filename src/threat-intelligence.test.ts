@@ -53,6 +53,10 @@ test("normalizes IDN domains and a single terminal dot", () => {
     () => normalizeIndicatorValue("domain", "-invalid.test"),
     IndicatorValidationError
   );
+  assert.throws(
+    () => normalizeIndicatorValue("domain", "192.0.2.44"),
+    IndicatorValidationError
+  );
 });
 
 test("canonicalizes HTTP URLs and strips embedded credentials", () => {
@@ -117,6 +121,7 @@ test("matches only explicitly mapped event fields using exact normalized values"
   });
 
   assert.equal(matches.length, 2);
+  assert.ok(matches.every((match) => match.event_id === "event-1"));
   assert.deepEqual(
     matches.map((match) => match.matched_field_path).sort(),
     ["data.domain", "data.source_ip"]
@@ -167,4 +172,27 @@ test("deduplicates repeated indicator records by indicator version and evidence 
   });
 
   assert.equal(matches.length, 1);
+});
+
+test("rejects oversized candidate sets and invalid event identifiers", () => {
+  assert.throws(
+    () => matchThreatIndicators({
+      eventId: "event-limit",
+      data: {},
+      indicators: Array.from({ length: 10_001 }, (_, index) =>
+        indicator({ id: String(index) })
+      ),
+      now
+    }),
+    IndicatorValidationError
+  );
+  assert.throws(
+    () => matchThreatIndicators({
+      eventId: "",
+      data: {},
+      indicators: [],
+      now
+    }),
+    IndicatorValidationError
+  );
 });
