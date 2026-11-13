@@ -42,7 +42,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
   });
 
   const result = await new OperatorAuthService(database).login(
-    "  OPERATOR@EXAMPLE.TEST ", "correct horse battery staple", "tenant-a"
+    "  OPERATOR@EXAMPLE.TEST ", "correct horse battery staple", "tenant-a", "192.0.2.10"
   );
 
   assert.match(result.token, /^[A-Za-z0-9_-]{43}$/);
