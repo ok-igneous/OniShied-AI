@@ -54,6 +54,11 @@ FROM onishield.operators o
 JOIN onishield.operator_memberships m ON m.operator_id=o.id
 WHERE o.email='reviewer@example.test';
 
+INSERT INTO onishield.operator_mfa_recovery_codes(operator_id,code_hash)
+SELECT id,repeat('9',64) FROM onishield.operators WHERE email='reviewer@example.test';
+INSERT INTO onishield.operator_mfa_recovery_codes(operator_id,code_hash)
+SELECT id,repeat('8',64) FROM onishield.operators WHERE email='reviewer@example.test';
+
 INSERT INTO onishield.operator_mfa_credentials
   (operator_id,active_ciphertext,active_nonce,active_tag,enabled_at,last_totp_counter)
 SELECT id,decode('00112233445566778899aabbccddeeff','hex'),
@@ -205,6 +210,31 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM onishield.resolve_operator_session(repeat('e',64))) THEN
     RAISE EXCEPTION 'Rotation did not create a valid replacement session';
+  END IF;
+
+  IF NOT onishield.create_operator_login_challenge(
+    repeat('7',64),'auth-review-tenant',
+    '10000000-0000-4000-8000-000000000001'::UUID,
+    (SELECT id FROM onishield.operator_memberships
+      WHERE operator_id='10000000-0000-4000-8000-000000000001'),
+    NOW()+INTERVAL '5 minutes'
+  ) THEN RAISE EXCEPTION 'Could not create recovery login challenge'; END IF;
+  PERFORM * FROM onishield.consume_operator_login_challenge_with_recovery(
+    repeat('7',64),repeat('9',64),repeat('6',64),NOW()+INTERVAL '8 hours'
+  );
+  BEGIN
+    PERFORM * FROM onishield.consume_operator_login_challenge_with_recovery(
+      repeat('7',64),repeat('9',64),repeat('5',64),NOW()+INTERVAL '8 hours'
+    );
+    RAISE EXCEPTION 'Recovery code or challenge replay was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='Recovery code or challenge replay was accepted' THEN RAISE; END IF;
+  END;
+  IF NOT onishield.mark_operator_session_step_up_with_recovery(repeat('e',64),repeat('8',64)) THEN
+    RAISE EXCEPTION 'Recovery code could not complete MFA step-up';
+  END IF;
+  IF onishield.mark_operator_session_step_up_with_recovery(repeat('e',64),repeat('8',64)) THEN
+    RAISE EXCEPTION 'Recovery code was accepted more than once';
   END IF;
 
 END
