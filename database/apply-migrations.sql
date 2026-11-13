@@ -10,3 +10,4 @@ REVOKE INSERT ON onishield.threat_intelligence_sources FROM onishield_app;
 \i database/migrations/006_auth_throttling_and_operator_review.sql
 \i database/migrations/007_operator_session_lifecycle.sql
 \i database/migrations/008_session_revocation_race_hardening.sql
+\i database/migrations/009_operator_step_up.sql
