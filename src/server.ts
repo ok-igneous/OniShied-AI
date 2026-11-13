@@ -7,7 +7,7 @@ import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-aut
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
-const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey
+const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey && config.mfaRecoveryPepper
   ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey, config.mfaRecoveryPepper)
   : null;
 const operatorLoginSchema = z.object({
