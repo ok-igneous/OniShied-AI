@@ -74,3 +74,14 @@ GRANT EXECUTE ON FUNCTION onishield.lookup_operator_credentials(TEXT) TO onishie
 GRANT EXECUTE ON FUNCTION onishield.create_operator_session(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) TO onishield_app;
 GRANT EXECUTE ON FUNCTION onishield.resolve_operator_session(TEXT) TO onishield_app;
 GRANT EXECUTE ON FUNCTION onishield.revoke_operator_session(TEXT) TO onishield_app;
+
+CREATE FUNCTION onishield.lookup_operator_membership(p_operator_id UUID,p_tenant_id TEXT)
+RETURNS TABLE(membership_id BIGINT,role TEXT)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,onishield AS $$
+ SELECT m.id,m.role FROM onishield.operator_memberships m
+ JOIN onishield.operators o ON o.id=m.operator_id
+ WHERE m.operator_id=p_operator_id AND m.tenant_id=p_tenant_id
+ AND m.status='active' AND o.status='active' LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION onishield.lookup_operator_membership(UUID,TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.lookup_operator_membership(UUID,TEXT) TO onishield_app;
