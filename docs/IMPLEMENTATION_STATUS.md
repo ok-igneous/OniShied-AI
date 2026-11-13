@@ -21,7 +21,7 @@
 - PostgreSQL-backed login throttling by HMAC-keyed email and source IP (five attempts per 15 minutes, then a 15-minute lock), plus a database smoke test.
 - Loopback-only operator login, session introspection, logout, rotation, session inventory/revocation, and threat-indicator review API routes. Rotation is atomic; session inventory is limited to the authenticated operator and tenant; privileged review/revocation operations serialize against session revocation. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
-- Resend transactional-email transport adapter using the HTTPS API, validated sender/recipient/subject fields, request timeout, sanitized errors, and unit tests. Account lifecycle workflows are not yet connected to this transport.\n- CI workflow configured to provision PostgreSQL, apply migrations, execute database smoke tests, run unit tests, type-check, and build.
+- Resend transactional-email transport plus operator invitation, email-verification, and password-reset backend workflows. Action tokens are random, HMAC-digested before database storage, short-lived, one-use, and audited. Invitation acceptance creates a verified operator and tenant membership transactionally; password reset revokes active sessions. Login now requires verified email. Unit tests cover token handling and generic reset behavior; PostgreSQL smoke coverage is included in CI. Frontend fragment-token pages and live Resend configuration remain outstanding.
 
 ## Important implementation boundaries
 
@@ -40,7 +40,7 @@ A successful CI run must be observed before treating the database controls or ap
 
 ## Next release gates
 
-1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure, including the new session lifecycle smoke coverage and migration 008 authorization-race hardening.
+1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure, including the new session lifecycle smoke coverage and migration 012 email-account lifecycle controls.
 2. Run the disposable Linux lab end-to-end and verify event ingestion, duplicate handling, tenant isolation, and indicator matching against PostgreSQL.
 3. Deploy and verify the web-client token pages, Resend sender/domain, invitation/email verification/password-reset flows, device labeling, remote browser/mobile token transport, TLS/origin policy, secure client storage, key rotation/backup, and throttle retention before exposing operator routes beyond loopback.
 4. Provision production reviewer accounts and independently review authenticated review/audit controls.
