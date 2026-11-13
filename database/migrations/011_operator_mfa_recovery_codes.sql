@@ -141,3 +141,33 @@ REVOKE ALL ON FUNCTION onishield.mark_operator_session_step_up_with_recovery(TEX
 GRANT EXECUTE ON FUNCTION onishield.activate_operator_mfa(TEXT,BIGINT,TEXT[]) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.consume_operator_login_challenge_with_recovery(TEXT,TEXT,TEXT,TIMESTAMPTZ) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.mark_operator_session_step_up_with_recovery(TEXT,TEXT) TO onishield_auth;
+
+CREATE OR REPLACE FUNCTION onishield.disable_operator_mfa(p_token_hash TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,onishield AS $$
+DECLARE trusted RECORD;
+BEGIN
+  SELECT s.id,s.operator_id INTO trusted
+    FROM onishield.operator_sessions s
+    JOIN onishield.operators o ON o.id=s.operator_id
+    JOIN onishield.operator_memberships m
+      ON m.id=s.membership_id AND m.tenant_id=s.tenant_id AND m.operator_id=s.operator_id
+   WHERE s.token_hash=p_token_hash AND s.revoked_at IS NULL AND s.expires_at>NOW()
+     AND s.step_up_at>=NOW()-INTERVAL '5 minutes'
+     AND o.status='active' AND m.status='active'
+   FOR UPDATE OF s;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  DELETE FROM onishield.operator_mfa_recovery_codes WHERE operator_id=trusted.operator_id;
+  DELETE FROM onishield.operator_mfa_credentials
+   WHERE operator_id=trusted.operator_id AND enabled_at IS NOT NULL;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+  INSERT INTO onishield.operator_mfa_audit(operator_id,action)
+    VALUES(trusted.operator_id,'disabled');
+  RETURN TRUE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION onishield.disable_operator_mfa(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.disable_operator_mfa(TEXT) TO onishield_auth;
