@@ -140,7 +140,7 @@ export class OperatorAuthService {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     const sessionHash = hashOperatorSessionToken(token);
     let consumed;
-    if (/^\\d{6}$/.test(code)) {
+    if (/^\d{6}$/.test(code)) {
       const secret = decryptMfaSecret({
         ciphertext:row.ciphertext, nonce:row.nonce, authTag:row.auth_tag
       }, this.mfaEncryptionKey);
@@ -321,7 +321,7 @@ export class OperatorAuthService {
         usedRecoveryCode = true;
       } else {
         const row = mfaState.rows[0];
-        if (!/^\\d{6}$/.test(code) || !row.ciphertext || !row.nonce || !row.auth_tag) {
+        if (!/^\d{6}$/.test(code) || !row.ciphertext || !row.nonce || !row.auth_tag) {
           throw new Error("Invalid step-up credentials");
         }
         const secret = decryptMfaSecret({
