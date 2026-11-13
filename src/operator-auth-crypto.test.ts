@@ -4,6 +4,7 @@ import {
   createOperatorSessionToken,
   hashOperatorPassword,
   hashOperatorSessionToken,
+  performDummyPasswordVerification,
   verifyOperatorPassword
 } from "./operator-auth-crypto.js";
 
@@ -13,6 +14,8 @@ test("password hashes are salted and verify only the correct password", async ()
   assert.notEqual(first, second);
   assert.equal(await verifyOperatorPassword("correct horse battery staple", first), true);
   assert.equal(await verifyOperatorPassword("wrong password", first), false);
+  assert.equal(await verifyOperatorPassword("x".repeat(257), first), false);
+  await performDummyPasswordVerification("unknown-account-password");
 });
 
 test("password policy rejects short and oversized passwords", async () => {
