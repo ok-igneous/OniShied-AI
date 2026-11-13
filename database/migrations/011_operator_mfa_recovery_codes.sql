@@ -34,7 +34,7 @@ BEGIN
     RETURN FALSE;
   END IF;
   SELECT count(DISTINCT value) INTO unique_hashes
-    FROM unnest(p_recovery_hashes) AS value
+    FROM unnest(p_recovery_hashes) AS hashes(value)
    WHERE value ~ '^[a-f0-9]{64}$';
   IF unique_hashes<>10 THEN RETURN FALSE; END IF;
 
