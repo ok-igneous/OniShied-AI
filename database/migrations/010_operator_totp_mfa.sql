@@ -103,7 +103,7 @@ BEGIN
   JOIN onishield.operator_memberships m
     ON m.id=s.membership_id AND m.tenant_id=s.tenant_id AND m.operator_id=s.operator_id
   WHERE s.token_hash=p_session_hash AND s.revoked_at IS NULL AND s.expires_at>NOW()
-    AND s.step_up_at>=NOW()-INTERVAL '5 minutes'
+    AND s.mfa_enrollment_step_up_at>=NOW()-INTERVAL '5 minutes'
     AND o.status='active' AND m.status='active'
   FOR UPDATE OF s;
   IF NOT FOUND THEN RETURN FALSE; END IF;
