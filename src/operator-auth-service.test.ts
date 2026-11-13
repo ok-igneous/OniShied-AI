@@ -45,7 +45,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
     throw new Error("Unexpected query");
   });
 
-  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login(
+  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login(
     "  OPERATOR@EXAMPLE.TEST ", "correct horse battery staple", "tenant-a", "192.0.2.10"
   );
 
@@ -74,7 +74,7 @@ test("wrong passwords fail generically and never create a session", async () => 
     : { rows: [] });
 
   await assert.rejects(
-    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test", "incorrect password", "tenant-a", "192.0.2.10"),
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login("operator@example.test", "incorrect password", "tenant-a", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(calls.some((call) => call.sql.includes("create_operator_session")), false);
@@ -86,7 +86,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "suspended" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(inactive.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
+    () => new OperatorAuthService(inactive.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(inactive.calls.some((call) => call.sql.includes("lookup_operator_membership")), false);
@@ -95,7 +95,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(noMembership.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
+    () => new OperatorAuthService(noMembership.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(noMembership.calls.some((call) => call.sql.includes("create_operator_session")), false);
@@ -103,7 +103,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
 
 test("session resolution rejects malformed tokens without querying the database", async () => {
   const { database, calls } = fakeDatabase(() => ({ rows: [] }));
-  const principal = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).resolve("invalid");
+  const principal = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).resolve("invalid");
   assert.equal(principal, null);
   assert.equal(calls.length, 0);
 });
@@ -111,7 +111,7 @@ test("session resolution rejects malformed tokens without querying the database"
 test("logout sends only the SHA-256 digest to PostgreSQL", async () => {
   const { database, calls } = fakeDatabase(() => ({ rows: [] }));
   const token = "A".repeat(43);
-  await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).logout(token);
+  await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).logout(token);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.params[0], hashOperatorSessionToken(token));
   assert.notEqual(calls[0]?.params[0], token);
@@ -121,7 +121,7 @@ test("authorization derives role from the resolved session and denies forbidden 
   const { database } = fakeDatabase((sql) => sql.includes("resolve_operator_session")
     ? { rows: [principalRow] }
     : { rows: [] });
-  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32));
+  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32));
   const principal = await service.authorize("A".repeat(43), "investigation:read");
   assert.equal(principal.operatorId, accountId);
   await assert.rejects(
@@ -143,7 +143,7 @@ test("persistent throttle blocks login before credential lookup", async () => {
     }
   } as unknown as Pick<Pool,"query">;
   await assert.rejects(
-    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test","wrong password","tenant-a","192.0.2.10"),
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login("operator@example.test","wrong password","tenant-a","192.0.2.10"),
     /Too many login attempts/
   );
   assert.equal(calls.filter((call) => call.sql.includes("lookup_operator_credentials")).length, 0);
@@ -159,7 +159,7 @@ test("review service binds audit actor to the authenticated session", async () =
     }] };
     return { rows: [] };
   });
-  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).reviewThreatIndicator(token,12,"active","Verified source provenance.");
+  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).reviewThreatIndicator(token,12,"active","Verified source provenance.");
   assert.equal(result.actorOperatorId,accountId);
   const reviewCall = calls.find((call) => call.sql.includes("review_threat_indicator"));
   assert.equal(reviewCall?.params[0],hashOperatorSessionToken(token));
@@ -173,7 +173,7 @@ test("session rotation invalidates the old token and returns a new token", async
     if (sql.includes("resolve_operator_session")) return { rows: [principalRow] };
     return { rows: [] };
   });
-  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).rotate(token);
+  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).rotate(token);
   assert.notEqual(result.token, token);
   assert.match(result.token, /^[A-Za-z0-9_-]{43}$/);
   const rotation = calls.find((call) => call.sql.includes("rotate_operator_session"));
@@ -192,7 +192,7 @@ test("session inventory returns metadata only and other-session revocation is te
     if (sql.includes("revoke_operator_session_by_id")) return { rows: [{ revoked: true }] };
     return { rows: [] };
   });
-  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32));
+  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32));
   const sessions = await service.listSessions(token);
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0]?.current, true);
@@ -208,7 +208,7 @@ test("session inventory returns metadata only and other-session revocation is te
 test("session revocation rejects malformed identifiers before database access", async () => {
   const { database, calls } = fakeDatabase(() => ({ rows: [] }));
   await assert.rejects(
-    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32))
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32))
       .revokeOtherSession("A".repeat(43), "not-a-uuid"),
     /Invalid session ID/
   );
@@ -226,7 +226,7 @@ test("step-up requires the current account password and marks only the current s
     if (sql.includes("mark_operator_session_step_up")) return { rows: [{marked:true}] };
     return { rows: [] };
   });
-  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32));
+  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32));
   const result = await service.stepUp(token, "correct horse battery staple");
   assert.equal(result.validForSeconds, 300);
   const mark = calls.find((call) => call.sql.includes("mark_operator_session_step_up"));
@@ -243,7 +243,7 @@ test("step-up rejects a wrong password without marking the session", async () =>
     return { rows: [] };
   });
   await assert.rejects(
-    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32))
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32))
       .stepUp("A".repeat(43), "incorrect password"),
     /Invalid step-up credentials/
   );
@@ -253,7 +253,7 @@ test("step-up rejects a wrong password without marking the session", async () =>
 test("MFA login issues a challenge instead of a session, then consumes a valid TOTP once", async () => {
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const secret = generateTotpSecret();
-  const encrypted = encryptMfaSecret(secret,"ab".repeat(32));
+  const encrypted = encryptMfaSecret(secret,"ab".repeat(32),"cd".repeat(32));
   const {database,calls} = fakeDatabase((sql) => {
     if (sql.includes("lookup_operator_credentials")) return {rows:[{operator_id:accountId,password_hash:passwordHash,operator_status:"active"}]};
     if (sql.includes("lookup_operator_membership")) return {rows:[{membership_id:"7",role:"security_analyst"}]};
@@ -264,7 +264,7 @@ test("MFA login issues a challenge instead of a session, then consumes a valid T
     if (sql.includes("resolve_operator_session")) return {rows:[principalRow]};
     return {rows:[]};
   });
-  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32),"cd".repeat(32));
   const login = await service.login("operator@example.test","correct horse battery staple","tenant-a","192.0.2.10");
   assert.ok("mfaRequired" in login);
   if (!("mfaRequired" in login)) throw new Error("Expected MFA challenge");
@@ -279,7 +279,7 @@ test("enrolled reviewer step-up requires a fresh TOTP counter", async () => {
   const token = "A".repeat(43);
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const secret = generateTotpSecret();
-  const encrypted = encryptMfaSecret(secret,"ab".repeat(32));
+  const encrypted = encryptMfaSecret(secret,"ab".repeat(32),"cd".repeat(32));
   const {database,calls} = fakeDatabase((sql) => {
     if (sql.includes("resolve_operator_session")) return {rows:[{...principalRow,role:"reviewer"}]};
     if (sql.includes("lookup_operator_credentials")) return {rows:[{password_hash:passwordHash,operator_status:"active"}]};
@@ -287,7 +287,7 @@ test("enrolled reviewer step-up requires a fresh TOTP counter", async () => {
     if (sql.includes("mark_operator_session_step_up")) return {rows:[{marked:true}]};
     return {rows:[]};
   });
-  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32),"cd".repeat(32));
   await assert.rejects(()=>service.stepUp(token,"correct horse battery staple"),/MFA code required/);
   assert.equal(calls.some(call=>call.sql.includes("mark_operator_session_step_up")),false);
   const code = generateTotpAt(secret,Date.now());
@@ -302,7 +302,7 @@ test("MFA enrollment reauthenticates password and stores only encrypted secret m
   const token = "A".repeat(43);
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const pendingSecret = generateTotpSecret();
-  const encrypted = encryptMfaSecret(pendingSecret,"ab".repeat(32));
+  const encrypted = encryptMfaSecret(pendingSecret,"ab".repeat(32),"cd".repeat(32));
   const {database,calls} = fakeDatabase((sql) => {
     if (sql.includes("resolve_operator_session")) return {rows:[{...principalRow,role:"reviewer"}]};
     if (sql.includes("lookup_operator_credentials")) return {rows:[{password_hash:passwordHash,operator_status:"active"}]};
@@ -312,7 +312,7 @@ test("MFA enrollment reauthenticates password and stores only encrypted secret m
     if (sql.includes("activate_operator_mfa")) return {rows:[{activated:true}]};
     return {rows:[]};
   });
-  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32),"cd".repeat(32));
   const enrollment = await service.beginMfaEnrollment(token,"correct horse battery staple");
   assert.match(enrollment.secret,/^[A-Z2-7]{32}$/);
   assert.ok(enrollment.otpauthUrl.startsWith("otpauth://totp/"));
