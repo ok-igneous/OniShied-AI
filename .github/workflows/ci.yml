@@ -63,6 +63,13 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/threat_intelligence_rls_smoke.sql
 
+      - name: Verify threat-intelligence reviewer controls
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \
+            -v ON_ERROR_STOP=1 -f database/tests/threat_indicator_review_smoke.sql
+
       - name: Enforce source-file size limit
         run: npm run check:lines
 
