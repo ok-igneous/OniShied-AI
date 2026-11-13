@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
@@ -16,8 +16,8 @@ export class OperatorLoginRateLimitError extends Error {
   }
 }
 
-function throttleKey(scope: "email" | "ip", value: string): string {
-  return createHash("sha256").update(`onishield:operator-login:${scope}:${value}`).digest("hex");
+function throttleKey(secret: string, scope: "email" | "ip", value: string): string {
+  return createHmac("sha256", secret).update(`onishield:operator-login:${scope}:${value}`).digest("hex");
 }
 
 function normalizeEmail(email: string): string {
@@ -27,7 +27,9 @@ function normalizeEmail(email: string): string {
 }
 
 export class OperatorAuthService {
-  constructor(private readonly database: Pick<Pool, "query">) {}
+  constructor(private readonly database: Pick<Pool, "query">, private readonly rateLimitSecret: string) {
+    if (rateLimitSecret.length < 32) throw new Error("AUTH_RATE_LIMIT_SECRET must contain at least 32 characters");
+  }
 
   private async consumeLoginLimit(key: string, maxAttempts: number): Promise<number> {
     const result = await this.database.query<{allowed:boolean;retry_after_seconds:number}>(
@@ -42,8 +44,8 @@ export class OperatorAuthService {
     const normalizedEmail = normalizeEmail(email);
     const normalizedTenantId = tenantId.trim();
     if (!clientIp || clientIp.length > 128 || isIP(clientIp) === 0) throw new Error("Invalid login credentials");
-    const emailKey = throttleKey("email", normalizedEmail);
-    const ipKey = throttleKey("ip", clientIp);
+    const emailKey = throttleKey(this.rateLimitSecret, "email", normalizedEmail);
+    const ipKey = throttleKey(this.rateLimitSecret, "ip", clientIp);
     const limits = await Promise.all([
       this.consumeLoginLimit(emailKey, 5),
       this.consumeLoginLimit(ipKey, 30)
