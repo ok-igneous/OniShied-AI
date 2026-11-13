@@ -3,11 +3,11 @@ import { z } from "zod";
 import type { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
 
 const invitationSchema = z.object({
-  email: z.string().min(3).max(254),
+  email: z.string().email().max(254),
   displayName: z.string().trim().min(1).max(120),
   role: z.enum(["admin", "security_analyst", "reviewer", "viewer"])
 }).strict();
-const emailSchema = z.object({ email: z.string().min(3).max(254) }).strict();
+const emailSchema = z.object({ email: z.string().email().max(254) }).strict();
 const tokenSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
 const passwordSchema = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
