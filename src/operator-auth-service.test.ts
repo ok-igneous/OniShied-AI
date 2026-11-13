@@ -19,6 +19,7 @@ function fakeDatabase(handler: (sql: string, params: unknown[]) => { rows: unkno
   const database = {
     query: async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
+      if (sql.includes("consume_operator_login_limit")) return { rows: [{ allowed: true, retry_after_seconds: 0 }] };
       return handler(sql, params);
     }
   } as unknown as Pick<Pool, "query">;
@@ -63,7 +64,7 @@ test("wrong passwords fail generically and never create a session", async () => 
     : { rows: [] });
 
   await assert.rejects(
-    () => new OperatorAuthService(database).login("operator@example.test", "incorrect password", "tenant-a"),
+    () => new OperatorAuthService(database).login("operator@example.test", "incorrect password", "tenant-a", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(calls.some((call) => call.sql.includes("create_operator_session")), false);
@@ -75,7 +76,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "suspended" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(inactive.database).login("operator@example.test", "correct horse battery staple", "tenant-a"),
+    () => new OperatorAuthService(inactive.database).login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(inactive.calls.some((call) => call.sql.includes("lookup_operator_membership")), false);
@@ -84,7 +85,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(noMembership.database).login("operator@example.test", "correct horse battery staple", "tenant-b"),
+    () => new OperatorAuthService(noMembership.database).login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(noMembership.calls.some((call) => call.sql.includes("create_operator_session")), false);
@@ -117,4 +118,40 @@ test("authorization derives role from the resolved session and denies forbidden 
     () => service.authorize("A".repeat(43), "response:approve"),
     /forbidden/
   );
+});
+
+test("persistent throttle blocks login before credential lookup", async () => {
+  const calls: Array<{sql:string;params:unknown[]}> = [];
+  const database = {
+    query: async (sql:string, params:unknown[] = []) => {
+      calls.push({sql,params});
+      if (sql.includes("consume_operator_login_limit")) {
+        const isIpBucket = calls.filter((call) => call.sql.includes("consume_operator_login_limit")).length === 2;
+        return { rows: [{ allowed: !isIpBucket, retry_after_seconds: isIpBucket ? 300 : 0 }] };
+      }
+      return { rows: [] };
+    }
+  } as unknown as Pick<Pool,"query">;
+  await assert.rejects(
+    () => new OperatorAuthService(database).login("operator@example.test","wrong password","tenant-a","192.0.2.10"),
+    /Too many login attempts/
+  );
+  assert.equal(calls.filter((call) => call.sql.includes("lookup_operator_credentials")).length, 0);
+});
+
+test("review service binds audit actor to the authenticated session", async () => {
+  const token = "A".repeat(43);
+  const { database, calls } = fakeDatabase((sql) => {
+    if (sql.includes("resolve_operator_session")) return { rows: [{...principalRow, role:"reviewer"}] };
+    if (sql.includes("review_threat_indicator")) return { rows: [{
+      indicator_id:"12", old_status:"pending", new_status:"active",
+      actor_operator_id:accountId, changed_at:"2026-11-13T12:00:00.000Z"
+    }] };
+    return { rows: [] };
+  });
+  const result = await new OperatorAuthService(database).reviewThreatIndicator(token,12,"active","Verified source provenance.");
+  assert.equal(result.actorOperatorId,accountId);
+  const reviewCall = calls.find((call) => call.sql.includes("review_threat_indicator"));
+  assert.equal(reviewCall?.params[0],hashOperatorSessionToken(token));
+  assert.equal(reviewCall?.params[1],12);
 });
