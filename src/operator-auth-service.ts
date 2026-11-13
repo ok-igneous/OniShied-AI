@@ -82,12 +82,12 @@ export class OperatorAuthService {
     ]);
     const retryAfter = Math.max(...limits);
     if (retryAfter > 0) throw new OperatorLoginRateLimitError(retryAfter);
-    const credentials = await this.database.query<{operator_id:string;password_hash:string;operator_status:string}>(
+    const credentials = await this.database.query<{operator_id:string;password_hash:string;operator_status:string;email_verified:boolean}>(
       "SELECT * FROM onishield.lookup_operator_credentials($1)", [normalizedEmail]);
     const account = credentials.rows[0];
     if (!account) { await performDummyPasswordVerification(password); throw new Error("Invalid login credentials"); }
     const passwordValid = await verifyOperatorPassword(password, account.password_hash);
-    if (!passwordValid || account.operator_status !== "active") throw new Error("Invalid login credentials");
+    if (!passwordValid || account.operator_status !== "active" || account.email_verified !== true) throw new Error("Invalid login credentials");
     const membership = await this.database.query<{membership_id:string;role:string}>(
       "SELECT * FROM onishield.lookup_operator_membership($1,$2)", [account.operator_id, normalizedTenantId]);
     const activeMembership = membership.rows[0];
