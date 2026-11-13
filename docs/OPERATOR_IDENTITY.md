@@ -2,7 +2,14 @@
 
 **Status:** Resend transactional-email transport is implemented as an isolated provider adapter; account invitation, email verification, and password recovery workflows are not yet implemented. Tenant-bound sessions, password verification, TOTP enrollment and login challenges, encrypted TOTP secrets, replay-resistant verification, privileged-role MFA enforcement, session lifecycle, persistent throttling, loopback-only routes, deny-by-default authorization, and authenticated review attribution are implemented in the repository. One-use recovery codes, encrypted TOTP secrets, replay-resistant verification, privileged-role MFA enforcement, session lifecycle, persistent throttling, loopback-only routes, deny-by-default authorization, and authenticated review attribution are implemented in the repository. Production verification remains outstanding. PostgreSQL execution and CI tests remain unverified because GitHub Actions has been unable to start a runner.
 
-## Transactional email provider\n\n- Resend is the selected transactional-email provider for invitations, email verification, and password recovery. `src/email-delivery.ts` calls the Resend HTTPS API directly with Node.js `fetch`; no SDK dependency is required.\n- Configure `RESEND_API_KEY` and `EMAIL_FROM` together. The sender must be verified in Resend before real delivery. Neither value belongs in Git.\n- The adapter enforces recipient/subject validation, a 10-second request timeout, and sanitized provider errors. It never logs or returns the API key or provider error body.\n- This is transport plumbing only. No public route sends invitations or reset links yet; those flows require hashed one-use tokens, database-enforced expiry/consumption, account-enumeration resistance, and audit records before they are enabled.\n\n## Identity model
+## Transactional email provider
+
+- Resend is the selected transactional-email provider for invitations, email verification, and password recovery. `src/email-delivery.ts` calls the Resend HTTPS API directly with Node.js `fetch`; no SDK dependency is required.
+- Configure `RESEND_API_KEY` and `EMAIL_FROM` together. The sender must be verified in Resend before real delivery. Neither value belongs in Git.
+- The adapter enforces recipient/subject validation, a 10-second request timeout, and sanitized provider errors. It never logs or returns the API key or provider error body.
+- This is transport plumbing only. No public route sends invitations or reset links yet; those flows require hashed one-use tokens, database-enforced expiry/consumption, account-enumeration resistance, and audit records before they are enabled.
+
+## Identity model
 
 - An operator account is separate from a tenant membership; one operator may belong to multiple tenants.
 - Roles: owner, admin, security_analyst, reviewer, viewer.
