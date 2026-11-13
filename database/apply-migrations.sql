@@ -8,3 +8,4 @@ REVOKE INSERT ON onishield.threat_intelligence_sources FROM onishield_app;
 \i database/migrations/004_threat_indicator_review.sql
 \i database/migrations/005_operator_identity.sql
 \i database/migrations/006_auth_throttling_and_operator_review.sql
+\i database/migrations/007_operator_session_lifecycle.sql
