@@ -20,7 +20,8 @@
 - Session resolution rejects revoked/expired sessions and inactive accounts/memberships.
 - Session revocation accepts only a validated opaque token and stores/uses its digest.
 - Unknown-account login attempts perform dummy scrypt work to reduce account-enumeration timing differences.
-- Permission checks use a server-defined role/action map and deny unknown roles/actions.
+- Unit tests cover normalized login, wrong passwords, inactive accounts, absent tenant membership, session token hashing, logout, and session-bound authorization.
+- Permission checks use a server-defined role/action map and deny unknown roles/actions. The auth service resolves the opaque session first, then authorizes the requested action from the persisted membership role; callers cannot supply a trusted role.
 
 Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_auth. The general onishield_app role has no execute grants on these functions. They require dedicated PostgreSQL security review before production.
 
