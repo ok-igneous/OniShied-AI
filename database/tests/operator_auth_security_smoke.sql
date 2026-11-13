@@ -81,6 +81,25 @@ BEGIN
   IF permitted THEN RAISE EXCEPTION 'Login throttle did not block the sixth attempt'; END IF;
   PERFORM onishield.reset_operator_login_limit(repeat('b',64));
 
+  IF NOT onishield.mark_operator_session_mfa_enrollment_step_up(repeat('d',64)) THEN
+    RAISE EXCEPTION 'Password-verified MFA enrollment step-up failed';
+  END IF;
+  IF NOT onishield.store_pending_operator_mfa(
+    repeat('d',64),decode('00112233445566778899aabbccddeeff','hex'),
+    decode('00112233445566778899aabb','hex'),
+    decode('00112233445566778899aabbccddeeff','hex')
+  ) THEN RAISE EXCEPTION 'Could not store encrypted pending MFA secret'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM onishield.get_pending_operator_mfa(repeat('d',64))) THEN
+    RAISE EXCEPTION 'Pending MFA secret was not retrievable for confirmation';
+  END IF;
+  IF NOT onishield.activate_operator_mfa(repeat('d',64),55) THEN
+    RAISE EXCEPTION 'MFA enrollment confirmation failed';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM onishield.get_operator_mfa('10000000-0000-4000-8000-000000000002'::UUID)
+    WHERE enabled
+  ) THEN RAISE EXCEPTION 'MFA was not activated for the viewer test account'; END IF;
+
   BEGIN
     PERFORM * FROM onishield.review_threat_indicator(
       repeat('a',64), current_setting('app.test_indicator_id')::BIGINT,
