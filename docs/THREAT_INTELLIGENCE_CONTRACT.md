@@ -1,7 +1,7 @@
 # Threat Intelligence Service Contract
 
-**Status:** Database schema committed; service, normalization, matching, review workflow, and tests are not implemented.  
-**Initial mode:** Tenant-scoped curated synthetic indicators only.
+**Status:** Tenant-scoped schema and deterministic matching code committed; database execution and CI remain unverified.  
+**Initial mode:** Curated synthetic indicators only.
 
 ## Purpose and boundaries
 
@@ -16,10 +16,31 @@ Initial scope is synthetic indicators and manually curated records. Automatic pu
 - `threat_indicator_matches`: tenant-owned event references and evidence paths, pinned to an exact indicator version and matcher version.
 - Composite tenant foreign keys prevent an indicator from referencing another tenant's source or a match from referencing another tenant's indicator.
 - All three tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
-- Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. Runtime cannot activate, revoke, update, or delete records.
+- Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. The migration runner explicitly revokes the generic runtime INSERT grant on sources.
+- Runtime indicator inserts are constrained by RLS to `pending` status. Runtime cannot activate, revoke, update, or delete records.
 - Global records have no representation in this first schema. Do not implement global visibility by inserting NULL or special tenant IDs.
 
-The migration is committed but has not been executed against PostgreSQL. No service behavior or isolation test is claimed as verified. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
+The migration is committed but has not been executed against PostgreSQL. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
+
+## Implemented deterministic matching
+
+Code:
+- `src/threat-intelligence.ts`: canonicalization, strict input validation, explicit event-field mapping, exact matching, validity/status checks, bounded candidate count, and evidence-linked match output.
+- `src/threat-intelligence-service.ts`: loads one stored event and active indicators inside a tenant-scoped database transaction, then inserts match records with database-enforced idempotency.
+- `src/threat-intelligence.test.ts`: unit tests for the pure normalization and matching functions.
+
+Supported indicator types:
+- IPv4 and IPv6 addresses.
+- IDNA-normalized domain names.
+- HTTP/HTTPS URLs with embedded credentials stripped.
+- SHA-256 hex digests.
+- Conservative ASCII email addresses with IDNA-normalized domains.
+
+Only these explicit event data fields are examined: `source_ip`, `destination_ip`, `domain`, `url`, `file_hash_sha256`, and `email_address`. The matcher does not recursively inspect arbitrary event data. Matching is exact; no DNS lookups, URL requests, file access, regex indicators, or external network activity occur.
+
+Only indicators with status `active`, a valid `valid_from`, and no elapsed `expires_at` can match. Pending, expired, revoked, and rejected indicators are ignored. Candidate processing is capped at 10,000 records per event; exceeding the cap fails closed rather than silently returning partial results.
+
+The database service is an internal callable function, not an HTTP endpoint, and is not wired into event ingestion or an autonomous response path. It returns TLP metadata with each match; TLP-aware authorization for user-facing reads and exports is still required before exposing matches outside the internal service.
 
 ## Indicator record
 
@@ -38,51 +59,31 @@ Every record must include:
 
 Confidence describes confidence in the indicator's correctness, not probability of compromise. Weak or unverified records remain pending. No score, including 100, can authorize response.
 
-## Normalization and matching
-
-- Exact matching only in version one.
-- Use vetted parsers for IP addresses and URLs.
-- Normalize domains using documented IDNA rules, lowercase DNS names, remove one terminal dot, and reject invalid labels.
-- Normalize SHA-256 hashes to lowercase hex with exact length.
-- Strip URL credentials; never fetch, resolve, visit, or probe an indicator during ingestion or matching.
-- Reject unsupported types, malformed values, control characters, oversized payloads, and arbitrary regular expressions.
-- Match only explicitly mapped event fields.
-- Pending, expired, revoked, and rejected records never match.
-- Record indicator version, event ID, matched field path, matcher version, and match time.
-- Deduplicate by indicator version + event ID + field path + matcher version.
-
 ## Tenant and handling boundaries
 
 Tenant-provided intelligence is private to that tenant by default. Never promote tenant intelligence to global scope automatically. Global records require a separately designed namespace, authorization role, review process, and RLS policy. Enforce tenant isolation in every query and RLS policy. TLP is a handling restriction, not an authorization substitute; reads and exports must enforce it in the service layer and be tested.
 
-## Internal service operations
+## Deferred internal operations
 
 - submitIndicator(input, actor): validate and create pending record.
 - reviewIndicator(id, decision, reviewer): activate or reject with append-only audit.
 - revokeIndicator(id, reason, actor): revoke immediately with audit.
 - expireIndicators(now): expire stale records and audit transitions.
-- matchEvent(eventRef, tenantContext): return authorized evidence-linked matches.
-- getIndicator(id, tenantContext): return authorized view.
+- getIndicator(id, tenantContext): return an authorized view.
 
 No public write API is needed for the first lab milestone. All operations must be authorized and audited. AI tools cannot create, edit, activate, or revoke intelligence.
 
-## Match result
-
-A match includes match_id, tenant_id, event_id, indicator_id and version, type, matched_field_path, source_id, source_confidence, validity_state, TLP, matcher_version, and matched_at.
-
-## Abuse controls and tests
+## Abuse controls and remaining acceptance tests
 
 Treat source descriptions, URLs, notes, and feed payloads as hostile text. Escape them on display. Bound parsing time, payload size, record count, and refresh frequency. Never let model output change intelligence status.
 
-Acceptance tests:
-1. Invalid indicator formats are rejected; normalization is deterministic.
-2. Expired, revoked, pending, and rejected records never match.
-3. Same-tenant matching works; cross-tenant reads and matches are denied.
-4. TLP restrictions apply to reads and exports.
-5. Replayed events do not duplicate match records.
-6. Prompt-injection text in feed content cannot change policy or tool permissions.
-7. Indicator matches cannot trigger response actions.
-8. Activation requires provenance, source review, and license reference.
-9. Expiry and revocation are auditable.
+Still required:
+1. Execute migrations and PostgreSQL RLS smoke tests in CI and a disposable lab.
+2. Verify same-tenant matching and cross-tenant denial with live PostgreSQL.
+3. Test database match idempotency on replay.
+4. Implement reviewer authorization and append-only status audit before activation/revocation.
+5. Implement and test TLP read/export enforcement before exposing matches.
+6. Add property/fuzz tests for URL, IDNA, IP, and email edge cases.
+7. Ensure indicator matches cannot trigger response actions.
 
 Use only reserved documentation IPs, .test domains, and fabricated synthetic hashes in lab fixtures. Do not import live malicious infrastructure or customer indicators in the initial milestone.
