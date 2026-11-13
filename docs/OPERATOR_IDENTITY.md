@@ -28,6 +28,26 @@
 
 Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_auth. The general onishield_app role has no execute grants on these functions. They require dedicated PostgreSQL security review before production.
 
+## Local API contract
+
+The routes are available only when both `AUTH_DATABASE_URL` (the dedicated `onishield_auth` login) and a separate random `AUTH_RATE_LIMIT_SECRET` of at least 32 characters are configured.
+
+- `POST /v1/operator/login` accepts JSON `{ "email": "...", "password": "...", "tenantId": "..." }`. A successful response contains an opaque bearer token, its expiry, and the resolved principal.
+- `GET /v1/operator/me` accepts `Authorization: Bearer <token>` and returns the current principal.
+- `POST /v1/operator/logout` accepts the same bearer header and revokes the session.
+- `POST /v1/threat-intelligence/:indicatorId/review` accepts `{ "status": "active|rejected|revoked|expired", "reason": "..." }` and requires the bearer token. Tenant and actor identity are derived from the session, never from the request body.
+
+Example login request:
+
+```http
+POST /v1/operator/login
+Content-Type: application/json
+
+{"email":"reviewer@example.test","password":"<password>","tenantId":"tenant-a"}
+```
+
+The example is a contract illustration only; no seeded production operator or password exists.
+
 ## API boundary and remaining safeguards
 
 - The current server binds to `127.0.0.1`; these endpoints are for the controlled local lab only. Do not expose them through a reverse proxy, public interface, or mobile network.
