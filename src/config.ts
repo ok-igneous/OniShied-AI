@@ -8,7 +8,7 @@ const configSchema = z.object({
   AUTH_DATABASE_URL: z.string().min(1).optional(),
   AUTH_RATE_LIMIT_SECRET: z.string().min(32).optional(),
   MFA_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
-  MFA_RECOVERY_PEPPER: z.string().min(32).optional(),
+  MFA_RECOVERY_PEPPER: z.string().min(32).optional(),\n  RESEND_API_KEY: z.string().min(20).optional(),\n  EMAIL_FROM: z.string().min(3).max(254).optional(),
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
   LAB_CONNECTOR_ID: z.string().min(1).max(128),
   LAB_CONNECTOR_TOKEN: z.string().min(32),
@@ -36,7 +36,7 @@ if (parsed.data.AUTH_DATABASE_URL && !parsed.data.MFA_RECOVERY_PEPPER) {
   throw new Error("MFA_RECOVERY_PEPPER is required when AUTH_DATABASE_URL is configured");
 }
 
-if (parsed.data.APP_ENV === "production" && parsed.data.DATABASE_SSL !== "true") {
+if (Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.EMAIL_FROM)) {\n  throw new Error("RESEND_API_KEY and EMAIL_FROM must be configured together");\n}\n\nif (parsed.data.APP_ENV === "production" && parsed.data.DATABASE_SSL !== "true") {
   throw new Error("DATABASE_SSL=true is required in production");
 }
 
@@ -47,7 +47,7 @@ export const config = {
   authDatabaseUrl: parsed.data.AUTH_DATABASE_URL,
   authRateLimitSecret: parsed.data.AUTH_RATE_LIMIT_SECRET,
   mfaEncryptionKey: parsed.data.MFA_ENCRYPTION_KEY,
-  mfaRecoveryPepper: parsed.data.MFA_RECOVERY_PEPPER,
+  mfaRecoveryPepper: parsed.data.MFA_RECOVERY_PEPPER,\n  resendApiKey: parsed.data.RESEND_API_KEY,\n  emailFrom: parsed.data.EMAIL_FROM,
   databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
