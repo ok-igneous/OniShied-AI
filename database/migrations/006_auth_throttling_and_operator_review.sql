@@ -26,6 +26,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, onishield
 AS $$
 DECLARE current_row onishield.operator_login_limits%ROWTYPE;
+  inserted_count INTEGER;
 BEGIN
   IF p_bucket_hash !~ '^[a-f0-9]{64}$'
      OR p_max_attempts < 1 OR p_max_attempts > 20
@@ -37,6 +38,11 @@ BEGIN
   INSERT INTO onishield.operator_login_limits(bucket_hash, attempts, window_started_at)
   VALUES (p_bucket_hash, 1, NOW())
   ON CONFLICT (bucket_hash) DO NOTHING;
+  GET DIAGNOSTICS inserted_count = ROW_COUNT;
+  IF inserted_count = 1 THEN
+    RETURN QUERY SELECT TRUE, 0;
+    RETURN;
+  END IF;
 
   SELECT * INTO current_row
   FROM onishield.operator_login_limits
