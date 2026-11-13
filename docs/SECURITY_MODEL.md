@@ -36,6 +36,8 @@ Protect customer systems, tenant data, operator identities, connector credential
 - Record source, license/handling restrictions, confidence rubric, collection time, validity, and expiry.
 - Tenant intelligence is private by default; global intelligence uses a separately authorized namespace.
 - Exact indicator matches are contextual evidence only and cannot authorize blocking or remediation.
+- Enforce TLP:CLEAR, GREEN, AMBER, and RED handling restrictions on every read, report, and export; TLP never overrides tenant isolation.
+- Derive actor identity, tenant, community, organization, and named-recipient membership from trusted server-side authorization, never caller-supplied fields.
 - Expired, revoked, pending, or rejected indicators must not match.
 
 ### AI safety
