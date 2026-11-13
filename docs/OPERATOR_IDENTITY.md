@@ -1,22 +1,22 @@
 # Operator Identity and Authentication
 
-**Status:** Resend transactional-email transport is implemented and tested at the adapter level. Invitation, email verification, and password recovery workflows are not yet implemented. Operator authentication and MFA code is present, but PostgreSQL execution and CI tests remain unverified because GitHub Actions has been unable to start a runner.
+**Status:** Resend transport and backend invitation, email-verification, and password-reset workflows are implemented in the repository. Frontend token pages, deployment configuration, PostgreSQL execution, and CI verification remain outstanding.
 
 ## Transactional email provider
 
 - Resend is the selected transactional-email provider for invitations, email verification, and password recovery. `src/email-delivery.ts` calls the Resend HTTPS API directly with Node.js `fetch`; no SDK dependency is required.
-- Configure `RESEND_API_KEY` and `EMAIL_FROM` together. The sender must be verified in Resend before real delivery. Neither value belongs in Git.
+- Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_PUBLIC_URL` together. The sender must be verified in Resend before real delivery. `APP_PUBLIC_URL` must point to the HTTPS web client that handles action links. None of these values belongs in Git.
 - The adapter enforces recipient/subject validation, payload bounds, a 10-second request timeout, Resend idempotency keys, and sanitized provider errors. It never logs or returns the API key or provider response body.
-- This is transport plumbing only. No public route sends invitations or reset links yet; those flows require hashed one-use tokens, database-enforced expiry/consumption, account-enumeration resistance, and audit records before they are enabled.
+- The backend routes use hashed one-use tokens, database-enforced expiry/consumption, account-enumeration resistance, rate limits, and audit records. The web pages that capture link fragments and call the confirmation endpoints are not included yet.
 
 ## Account lifecycle through Resend
 
-- Configure \`RESEND_API_KEY\`, \`EMAIL_FROM\`, and \`APP_PUBLIC_URL\` together. \`EMAIL_FROM\` must be a sender/domain verified in Resend. \`APP_PUBLIC_URL\` is the HTTPS origin of the web client that hosts \`/operator/accept-invitation\`, \`/operator/verify-email\`, and \`/operator/reset-password\`.
+- Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_PUBLIC_URL` together. `EMAIL_FROM` must be a sender/domain verified in Resend. `APP_PUBLIC_URL` is the HTTPS origin of the web client that hosts `/operator/accept-invitation`, `/operator/verify-email`, and `/operator/reset-password`.
 - Invitation creation requires an authenticated owner or admin. Owners may invite admin, analyst, reviewer, or viewer roles; admins may invite analyst, reviewer, or viewer roles. Invitations expire after 48 hours. Acceptance creates the operator and active tenant membership in one database transaction and marks the invited address verified.
 - Existing unverified active accounts can request email verification. Verification tokens expire after 30 minutes and are consumed once. Login rejects accounts whose email is not verified; the verification-request endpoint returns the same response whether an account exists or not.
 - Password-reset requests are available only for active, verified accounts. Responses are generic to prevent account enumeration. Reset tokens expire after 30 minutes, are consumed atomically, and revoke every active session for that operator.
-- Raw action tokens are 256-bit random values delivered only in email links as URL fragments (\`#token=...\`), not query parameters. The web client must read the fragment and POST the token to the matching API confirmation endpoint; fragments are not sent in HTTP requests or referrer headers. PostgreSQL stores only HMAC-SHA256 digests using \`MFA_RECOVERY_PEPPER\`.
-- The database records invitation creation/acceptance, email verification, and password-reset request/completion events in \`operator_account_audit\`. Email action rows and audit rows are inaccessible directly to application/auth roles; only narrowly granted SECURITY DEFINER functions can operate on them.
+- Raw action tokens are 256-bit random values delivered only in email links as URL fragments (`#token=...`), not query parameters. The web client must read the fragment and POST the token to the matching API confirmation endpoint; fragments are not sent in HTTP requests or referrer headers. PostgreSQL stores only HMAC-SHA256 digests using `MFA_RECOVERY_PEPPER`.
+- The database records invitation creation/acceptance, email verification, and password-reset request/completion events in `operator_account_audit`. Email action rows and audit rows are inaccessible directly to application/auth roles; only narrowly granted SECURITY DEFINER functions can operate on them.
 - Email verification and password-reset requests are rate-limited by HMAC-keyed email and source-IP buckets. Resend provider failures on these generic endpoints are deliberately not reflected to callers, preserving account-enumeration resistance. Invitation delivery failures return an error to the authenticated inviter; retrying creates a new invitation and invalidates prior unused invitations for that recipient and tenant.
 - The API backend is implemented, but the web pages that capture fragment tokens and call the confirmation endpoints are not part of this repository yet. Do not send production invitations until those pages are deployed and tested.
 
@@ -97,7 +97,7 @@ The example is a contract illustration only; no seeded production operator or pa
 
 ## Release gates
 
-1. Verify migrations 006–011, MFA enrollment/login/step-up/disable flows, TOTP replay prevention, recovery-code one-use consumption, challenge expiry and one-use behavior, MFA audit records, five-minute review step-up expiry, session lifecycle, and all PostgreSQL/RLS smoke tests in a successful CI run.
+1. Verify migrations 006–012, MFA enrollment/login/step-up/disable flows, TOTP replay prevention, recovery-code one-use consumption, challenge expiry and one-use behavior, MFA audit records, five-minute review step-up expiry, session lifecycle, and all PostgreSQL/RLS smoke tests in a successful CI run.
 2. Deploy and test the web pages for invitation acceptance, email verification, and password reset. Configure a verified Resend sender and HTTPS `APP_PUBLIC_URL`; add delivery monitoring and a support-safe account recovery process. Define encryption-key rotation and backup/restore procedures before production.
 3. Design and security-review remote browser/mobile token transport, TLS, origin policy, secure storage, and step-up authentication.
 4. Replace shared lab reviewer DB identity with individually attributable reviewer accounts in the production operations model.
