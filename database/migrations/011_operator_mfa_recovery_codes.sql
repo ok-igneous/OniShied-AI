@@ -33,7 +33,7 @@ BEGIN
      OR array_position(p_recovery_hashes,NULL) IS NOT NULL THEN
     RETURN FALSE;
   END IF;
-  SELECT count(DISTINCT value) INTO unique_hashes
+  SELECT count(DISTINCT hash_value) INTO unique_hashes
     FROM unnest(p_recovery_hashes) AS recovery(hash_value)
    WHERE hash_value ~ '^[a-f0-9]{64}$';
   IF unique_hashes<>10 THEN RETURN FALSE; END IF;
