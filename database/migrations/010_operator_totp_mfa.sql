@@ -1,4 +1,6 @@
 -- Operator TOTP MFA: encrypted secrets, one-time login challenges, replay protection.
+-- Remove the earlier password-only step-up function so enrolled accounts cannot bypass TOTP.
+DROP FUNCTION onishield.mark_operator_session_step_up(TEXT);
 CREATE TABLE onishield.operator_mfa_credentials (
   operator_id UUID PRIMARY KEY REFERENCES onishield.operators(id) ON DELETE CASCADE,
   pending_ciphertext BYTEA,
@@ -157,6 +159,7 @@ RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,onishield AS $$
 DECLARE trusted RECORD;
 DECLARE mfa_enabled BOOLEAN;
+DECLARE updated_operator UUID;
 BEGIN
  IF p_token_hash !~ '^[a-f0-9]{64}$' THEN RETURN FALSE; END IF;
  SELECT s.id,s.operator_id INTO trusted FROM onishield.operator_sessions s
@@ -169,11 +172,11 @@ BEGIN
  SELECT enabled_at IS NOT NULL INTO mfa_enabled FROM onishield.operator_mfa_credentials
  WHERE operator_id=trusted.operator_id FOR UPDATE;
  IF COALESCE(mfa_enabled,FALSE) THEN
-  IF p_counter IS NULL OR NOT EXISTS(
-   UPDATE onishield.operator_mfa_credentials SET last_totp_counter=p_counter,updated_at=NOW()
+  IF p_counter IS NULL THEN RETURN FALSE; END IF;
+  UPDATE onishield.operator_mfa_credentials SET last_totp_counter=p_counter,updated_at=NOW()
    WHERE operator_id=trusted.operator_id AND enabled_at IS NOT NULL
-   AND last_totp_counter<p_counter RETURNING operator_id
-  ) THEN RETURN FALSE; END IF;
+   AND last_totp_counter<p_counter RETURNING operator_id INTO updated_operator;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
  ELSIF p_counter IS NOT NULL THEN RETURN FALSE;
  END IF;
  UPDATE onishield.operator_sessions SET step_up_at=NOW() WHERE id=trusted.id;
