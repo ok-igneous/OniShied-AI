@@ -92,8 +92,32 @@ BEGIN
     IF SQLERRM <> 'Step-up authentication required' THEN RAISE; END IF;
   END;
 
-  IF NOT onishield.mark_operator_session_step_up(repeat('a',64)) THEN
-    RAISE EXCEPTION 'Valid operator session could not complete step-up';
+  IF onishield.mark_operator_session_step_up(repeat('a',64),NULL) THEN
+    RAISE EXCEPTION 'Privileged reviewer completed password-only step-up';
+  END IF;
+  IF NOT onishield.create_operator_login_challenge(
+    repeat('1',64),'auth-review-tenant',
+    '10000000-0000-4000-8000-000000000001'::UUID,
+    (SELECT id FROM onishield.operator_memberships
+      WHERE operator_id='10000000-0000-4000-8000-000000000001'),
+    NOW()+INTERVAL '5 minutes'
+  ) THEN RAISE EXCEPTION 'Could not create MFA challenge'; END IF;
+  PERFORM * FROM onishield.consume_operator_login_challenge(
+    repeat('1',64),123,repeat('2',64),NOW()+INTERVAL '8 hours'
+  );
+  BEGIN
+    PERFORM * FROM onishield.consume_operator_login_challenge(
+      repeat('1',64),124,repeat('3',64),NOW()+INTERVAL '8 hours'
+    );
+    RAISE EXCEPTION 'MFA login challenge replay was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='MFA login challenge replay was accepted' THEN RAISE; END IF;
+  END;
+  IF onishield.mark_operator_session_step_up(repeat('a',64),123) THEN
+    RAISE EXCEPTION 'Previously used TOTP counter was accepted for step-up';
+  END IF;
+  IF NOT onishield.mark_operator_session_step_up(repeat('a',64),124) THEN
+    RAISE EXCEPTION 'Fresh TOTP counter could not complete privileged step-up';
   END IF;
 
   PERFORM * FROM onishield.review_threat_indicator(
