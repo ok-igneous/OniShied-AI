@@ -36,7 +36,7 @@ ALTER TABLE onishield.operator_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE onishield.operator_sessions FORCE ROW LEVEL SECURITY;
 CREATE POLICY operator_sessions_tenant_scope ON onishield.operator_sessions USING(tenant_id=current_setting('app.tenant_id',true)) WITH CHECK(tenant_id=current_setting('app.tenant_id',true));
 CREATE POLICY operator_sessions_owner_all ON onishield.operator_sessions TO onishield_owner USING(true) WITH CHECK(true);
-GRANT USAGE ON SCHEMA onishield TO onishield_app;
+GRANT USAGE ON SCHEMA onishield TO onishield_app, onishield_auth;
 GRANT SELECT ON onishield.operator_memberships TO onishield_app;
 GRANT SELECT,INSERT,UPDATE ON onishield.operator_sessions TO onishield_app;
 GRANT USAGE,SELECT ON SEQUENCE onishield.operator_memberships_id_seq TO onishield_app;
