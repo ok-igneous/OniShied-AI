@@ -54,6 +54,13 @@ FROM onishield.operators o
 JOIN onishield.operator_memberships m ON m.operator_id=o.id
 WHERE o.email='reviewer@example.test';
 
+INSERT INTO onishield.operator_mfa_credentials
+  (operator_id,active_ciphertext,active_nonce,active_tag,enabled_at,last_totp_counter)
+SELECT id,decode('00112233445566778899aabbccddeeff','hex'),
+       decode('00112233445566778899aabb','hex'),
+       decode('00112233445566778899aabbccddeeff','hex'),NOW(),100
+FROM onishield.operators WHERE email='reviewer@example.test';
+
 SET LOCAL ROLE onishield_auth;
 DO $$
 DECLARE attempt INTEGER; permitted BOOLEAN;
