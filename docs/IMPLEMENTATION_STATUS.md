@@ -18,7 +18,7 @@
 - Operator identity and tenant-membership schema; scrypt password verification, opaque session tokens, dedicated auth database role/pool, narrow SECURITY DEFINER credential/session functions, tenant-bound session validation/revocation, and deny-by-default role/action authorization bound to a validated session.
 - Operator-auth service unit tests for successful login, wrong password, inactive account, missing tenant membership, token digest handling, logout, session-bound authorization, persistent throttle enforcement, and authenticated review attribution.
 - PostgreSQL-backed login throttling by HMAC-keyed email and source IP (five attempts per 15 minutes, then a 15-minute lock), plus a database smoke test.
-- Loopback-only operator login, session introspection, logout, rotation, session inventory/revocation, and threat-indicator review API routes. Rotation is atomic; session inventory is limited to the authenticated operator and tenant. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
+- Loopback-only operator login, session introspection, logout, rotation, session inventory/revocation, and threat-indicator review API routes. Rotation is atomic; session inventory is limited to the authenticated operator and tenant; privileged review/revocation operations serialize against session revocation. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
 - CI workflow configured to provision PostgreSQL, apply migrations, execute database smoke tests, run unit tests, type-check, and build.
 
@@ -39,7 +39,7 @@ A successful CI run must be observed before treating the database controls or ap
 
 ## Next release gates
 
-1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure, including the new session lifecycle smoke coverage.
+1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure, including the new session lifecycle smoke coverage and migration 008 authorization-race hardening.
 2. Run the disposable Linux lab end-to-end and verify event ingestion, duplicate handling, tenant isolation, and indicator matching against PostgreSQL.
 3. Complete account invitation/recovery, device labeling, remote browser/mobile token transport, TLS/origin policy, secure client storage, throttle retention, and step-up authentication before exposing operator routes beyond loopback.
 4. Provision production reviewer accounts and independently review authenticated review/audit controls.
