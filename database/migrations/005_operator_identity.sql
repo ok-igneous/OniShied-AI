@@ -38,7 +38,7 @@ CREATE POLICY operator_sessions_tenant_scope ON onishield.operator_sessions USIN
 CREATE POLICY operator_sessions_owner_all ON onishield.operator_sessions TO onishield_owner USING(true) WITH CHECK(true);
 GRANT USAGE ON SCHEMA onishield TO onishield_app, onishield_auth;
 GRANT SELECT ON onishield.operator_memberships TO onishield_app;
-GRANT SELECT,INSERT,UPDATE ON onishield.operator_sessions TO onishield_app;
+REVOKE ALL ON onishield.operator_sessions FROM onishield_app, onishield_auth;
 GRANT USAGE,SELECT ON SEQUENCE onishield.operator_memberships_id_seq TO onishield_app;
 REVOKE ALL ON onishield.operators FROM onishield_app;
 REVOKE INSERT,UPDATE,DELETE ON onishield.operator_memberships FROM onishield_app;
