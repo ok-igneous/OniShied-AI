@@ -117,7 +117,7 @@ BEGIN
     OR normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
     OR p_expires_at<=NOW() OR p_expires_at>NOW()+INTERVAL '30 minutes' THEN RETURN; END IF;
   SELECT id,email INTO target FROM onishield.operators
-   WHERE email=normalized_email AND status='active' AND email_verified_at IS NULL;
+   WHERE email=normalized_email AND status='active' AND email_verified_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN RETURN; END IF;
   UPDATE onishield.operator_email_actions SET consumed_at=NOW()
    WHERE operator_id=target.id AND action_type='email_verification' AND consumed_at IS NULL;
@@ -140,7 +140,7 @@ BEGIN
     OR normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
     OR p_expires_at<=NOW() OR p_expires_at>NOW()+INTERVAL '30 minutes' THEN RETURN; END IF;
   SELECT id,email INTO target FROM onishield.operators
-   WHERE email=normalized_email AND status='active' AND email_verified_at IS NOT NULL;
+   WHERE email=normalized_email AND status='active' AND email_verified_at IS NOT NULL FOR UPDATE;
   IF NOT FOUND THEN RETURN; END IF;
   UPDATE onishield.operator_email_actions SET consumed_at=NOW()
    WHERE operator_id=target.id AND action_type='password_reset' AND consumed_at IS NULL;
