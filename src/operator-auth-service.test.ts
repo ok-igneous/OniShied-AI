@@ -209,3 +209,38 @@ test("session revocation rejects malformed identifiers before database access", 
   );
   assert.equal(calls.length, 0);
 });
+
+test("step-up requires the current account password and marks only the current session", async () => {
+  const token = "A".repeat(43);
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const { database, calls } = fakeDatabase((sql) => {
+    if (sql.includes("resolve_operator_session")) return { rows: [principalRow] };
+    if (sql.includes("lookup_operator_credentials")) {
+      return { rows: [{password_hash:passwordHash,operator_status:"active"}] };
+    }
+    if (sql.includes("mark_operator_session_step_up")) return { rows: [{marked:true}] };
+    return { rows: [] };
+  });
+  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters");
+  const result = await service.stepUp(token, "correct horse battery staple");
+  assert.equal(result.validForSeconds, 300);
+  const mark = calls.find((call) => call.sql.includes("mark_operator_session_step_up"));
+  assert.equal(mark?.params[0], hashOperatorSessionToken(token));
+});
+
+test("step-up rejects a wrong password without marking the session", async () => {
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const { database, calls } = fakeDatabase((sql) => {
+    if (sql.includes("resolve_operator_session")) return { rows: [principalRow] };
+    if (sql.includes("lookup_operator_credentials")) {
+      return { rows: [{password_hash:passwordHash,operator_status:"active"}] };
+    }
+    return { rows: [] };
+  });
+  await assert.rejects(
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters")
+      .stepUp("A".repeat(43), "incorrect password"),
+    /Invalid step-up credentials/
+  );
+  assert.equal(calls.some((call) => call.sql.includes("mark_operator_session_step_up")), false);
+});
