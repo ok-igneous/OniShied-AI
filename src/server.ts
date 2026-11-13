@@ -203,15 +203,17 @@ app.post("/v1/operator/step-up", async (request, reply) => {
 app.post("/v1/operator/mfa/enroll", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
   const token = operatorBearer(request.headers.authorization);
+  const parsed = z.object({password:z.string().min(1).max(256)}).strict().safeParse(request.body);
   if (!token) return reply.code(401).send({error:"unauthorized"});
+  if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_enrollment_request"});
   try {
-    const enrollment = await operatorAuth.beginMfaEnrollment(token);
+    const enrollment = await operatorAuth.beginMfaEnrollment(token,parsed.data.password);
     reply.header("cache-control","no-store");
     reply.header("pragma","no-cache");
     return { enrollment };
   } catch (error) {
     if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({error:"unauthorized"});
-    if (error instanceof Error && error.message === "Recent password step-up required") return reply.code(428).send({error:"step_up_required"});
+    if (error instanceof Error && error.message === "Invalid step-up credentials") return reply.code(401).send({error:"invalid_step_up_credentials"});
     request.log.error({err:error},"MFA enrollment unavailable");
     return reply.code(503).send({error:"operator_auth_unavailable"});
   }
