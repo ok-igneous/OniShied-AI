@@ -18,7 +18,7 @@ Protect customer systems, tenant data, operator identities, connector credential
 ## Required controls
 
 ### Identity and access
-- Strong authentication for operators.
+- Strong authentication for operators, including TOTP for privileged operator roles; MFA secrets must be encrypted with a separately managed key, challenges must be one-use, and TOTP counters must be replay-protected.
 - Role-based access with least privilege.
 - Short-lived, scoped connector credentials and revocation.
 - Tenant-scoped authorization on every request and background job.
