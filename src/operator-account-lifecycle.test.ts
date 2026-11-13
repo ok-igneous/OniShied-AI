@@ -12,6 +12,7 @@ function harness(handler: (sql: string, params: unknown[]) => { rows: unknown[] 
   const database = {
     query: async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
+      if (sql.includes("consume_operator_login_limit")) return { rows: [{ allowed: true, retry_after_seconds: 0 }] };
       const result = handler(sql, params) as { rows: unknown[]; rowCount?: number };
       return { ...result, rowCount: result.rowCount ?? result.rows.length };
     }
@@ -35,7 +36,7 @@ test("invitation stores only a token digest and sends a fragment link through Re
   }));
   await service.createInvitation("A".repeat(43), {
     email: " NEW@EXAMPLE.TEST ", displayName: "New Operator", role: "security_analyst"
-  });
+  }, "192.0.2.10");
   const call = calls.find((entry) => entry.sql.includes("create_operator_invitation"));
   assert.ok(call);
   assert.equal(call.params[1], "new@example.test");
@@ -70,8 +71,8 @@ test("email verification and password reset consume peppered token digests", asy
     return { rows: [] };
   });
   const raw = "A".repeat(43);
-  assert.equal(await service.verifyEmail(raw), true);
-  assert.equal(await service.resetPassword(raw, "a secure password with 12+ chars"), true);
+  assert.equal(await service.verifyEmail(raw, "192.0.2.10"), true);
+  assert.equal(await service.resetPassword(raw, "a secure password with 12+ chars", "192.0.2.10"), true);
   const verify = calls.find((entry) => entry.sql.includes("consume_operator_email_verification"));
   const reset = calls.find((entry) => entry.sql.includes("consume_operator_password_reset"));
   assert.match(String(verify?.params[0]), /^[a-f0-9]{64}$/);
