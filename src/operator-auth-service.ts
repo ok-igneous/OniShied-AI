@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
-import { authPool } from "./database.js";
 import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPasswordVerification, verifyOperatorPassword } from "./operator-auth-crypto.js";
 
 export interface OperatorPrincipal { tenantId: string; operatorId: string; membershipId: string; email: string; displayName: string; role: string; }
@@ -132,8 +131,3 @@ export class OperatorAuthService {
   }
 }
 
-/** Create the service only when the dedicated auth connection is configured. */
-export function createOperatorAuthService(): OperatorAuthService {
-  if (!authPool) throw new Error("AUTH_DATABASE_URL is required for operator authentication");
-  return new OperatorAuthService(authPool);
-}
