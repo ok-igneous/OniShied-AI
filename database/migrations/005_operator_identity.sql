@@ -28,7 +28,8 @@ CREATE TABLE onishield.operator_memberships (
     CHECK (status IN ('pending', 'active', 'suspended', 'revoked')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (tenant_id, operator_id),
-  UNIQUE (tenant_id, id)
+  UNIQUE (tenant_id, id),
+  UNIQUE (tenant_id, id, operator_id)
 );
 
 CREATE TABLE onishield.operator_sessions (
@@ -41,9 +42,8 @@ CREATE TABLE onishield.operator_sessions (
   expires_at TIMESTAMPTZ NOT NULL,
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   revoked_at TIMESTAMPTZ,
-  FOREIGN KEY (tenant_id, membership_id)
-    REFERENCES onishield.operator_memberships (tenant_id, id),
-  FOREIGN KEY (operator_id) REFERENCES onishield.operators(id),
+  FOREIGN KEY (tenant_id, membership_id, operator_id)
+    REFERENCES onishield.operator_memberships (tenant_id, id, operator_id),
   CHECK (expires_at > created_at)
 );
 
@@ -58,6 +58,9 @@ CREATE POLICY operator_memberships_tenant_scope
   ON onishield.operator_memberships
   USING (tenant_id = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+CREATE POLICY operator_memberships_owner_all
+  ON onishield.operator_memberships TO onishield_owner
+  USING (true) WITH CHECK (true);
 
 ALTER TABLE onishield.operator_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE onishield.operator_sessions FORCE ROW LEVEL SECURITY;
@@ -65,6 +68,9 @@ CREATE POLICY operator_sessions_tenant_scope
   ON onishield.operator_sessions
   USING (tenant_id = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+CREATE POLICY operator_sessions_owner_all
+  ON onishield.operator_sessions TO onishield_owner
+  USING (true) WITH CHECK (true);
 
 -- Password hashes and operator records are intentionally not readable by the
 -- normal application DB role. No authentication endpoint is enabled by this
