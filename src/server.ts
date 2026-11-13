@@ -7,7 +7,9 @@ import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-aut
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
-const operatorAuth = authPool ? new OperatorAuthService(authPool) : null;
+const operatorAuth = authPool && config.authRateLimitSecret
+  ? new OperatorAuthService(authPool, config.authRateLimitSecret)
+  : null;
 const operatorLoginSchema = z.object({
   email: z.string().min(3).max(254),
   password: z.string().min(1).max(256),
