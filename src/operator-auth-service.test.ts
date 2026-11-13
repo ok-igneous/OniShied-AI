@@ -160,3 +160,52 @@ test("review service binds audit actor to the authenticated session", async () =
   assert.equal(reviewCall?.params[0],hashOperatorSessionToken(token));
   assert.equal(reviewCall?.params[1],12);
 });
+
+test("session rotation invalidates the old token and returns a new token", async () => {
+  const token = "A".repeat(43);
+  const { database, calls } = fakeDatabase((sql) => {
+    if (sql.includes("rotate_operator_session")) return { rows: [{ session_id: "new-session" }], rowCount: 1 };
+    if (sql.includes("resolve_operator_session")) return { rows: [principalRow] };
+    return { rows: [] };
+  });
+  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters").rotate(token);
+  assert.notEqual(result.token, token);
+  assert.match(result.token, /^[A-Za-z0-9_-]{43}$/);
+  const rotation = calls.find((call) => call.sql.includes("rotate_operator_session"));
+  assert.equal(rotation?.params[0], hashOperatorSessionToken(token));
+  assert.equal(rotation?.params[1], hashOperatorSessionToken(result.token));
+});
+
+test("session inventory returns metadata only and other-session revocation is tenant-bound in SQL", async () => {
+  const token = "A".repeat(43);
+  const { database, calls } = fakeDatabase((sql) => {
+    if (sql.includes("list_operator_sessions")) return { rows: [{
+      session_id: "session-1", created_at: "2026-11-13T10:00:00Z",
+      expires_at: "2026-11-13T18:00:00Z", last_seen_at: "2026-11-13T11:00:00Z",
+      revoked_at: null, is_current: true
+    }] };
+    if (sql.includes("revoke_operator_session_by_id")) return { rows: [{ revoked: true }] };
+    return { rows: [] };
+  });
+  const service = new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters");
+  const sessions = await service.listSessions(token);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0]?.current, true);
+  assert.equal("token" in (sessions[0] ?? {}), false);
+  assert.equal(await service.revokeOtherSession(token, "00000000-0000-4000-8000-000000000002"), true);
+  const listCall = calls.find((call) => call.sql.includes("list_operator_sessions"));
+  const revokeCall = calls.find((call) => call.sql.includes("revoke_operator_session_by_id"));
+  assert.equal(listCall?.params[0], hashOperatorSessionToken(token));
+  assert.equal(revokeCall?.params[0], hashOperatorSessionToken(token));
+  assert.equal(revokeCall?.params[1], "00000000-0000-4000-8000-000000000002");
+});
+
+test("session revocation rejects malformed identifiers before database access", async () => {
+  const { database, calls } = fakeDatabase(() => ({ rows: [] }));
+  await assert.rejects(
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters")
+      .revokeOtherSession("A".repeat(43), "not-a-uuid"),
+    /Invalid session ID/
+  );
+  assert.equal(calls.length, 0);
+});
