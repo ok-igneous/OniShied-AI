@@ -93,6 +93,60 @@ app.post("/v1/operator/logout", async (request, reply) => {
   }
 });
 
+app.post("/v1/operator/rotate", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+  const token = operatorBearer(request.headers.authorization);
+  if (!token) return reply.code(401).send({ error: "unauthorized" });
+  try {
+    const result = await operatorAuth.rotate(token);
+    reply.header("cache-control", "no-store");
+    reply.header("pragma", "no-cache");
+    return { session: result };
+  } catch (error) {
+    if (error instanceof Error && /Unauthorized session rotation/.test(error.message)) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    request.log.error({ err: error }, "Operator session rotation unavailable");
+    return reply.code(503).send({ error: "operator_auth_unavailable" });
+  }
+});
+
+app.get("/v1/operator/sessions", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+  const token = operatorBearer(request.headers.authorization);
+  if (!token) return reply.code(401).send({ error: "unauthorized" });
+  try {
+    if (!await operatorAuth.resolve(token)) return reply.code(401).send({ error: "unauthorized" });
+    const sessions = await operatorAuth.listSessions(token);
+    reply.header("cache-control", "no-store");
+    return { sessions };
+  } catch (error) {
+    request.log.error({ err: error }, "Operator session inventory unavailable");
+    return reply.code(503).send({ error: "operator_auth_unavailable" });
+  }
+});
+
+app.delete<{ Params: { sessionId: string } }>(
+  "/v1/operator/sessions/:sessionId",
+  async (request, reply) => {
+    if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+    const token = operatorBearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!z.string().uuid().safeParse(request.params.sessionId).success) {
+      return reply.code(400).send({ error: "invalid_session_id" });
+    }
+    try {
+      if (!await operatorAuth.resolve(token)) return reply.code(401).send({ error: "unauthorized" });
+      const revoked = await operatorAuth.revokeOtherSession(token, request.params.sessionId);
+      if (!revoked) return reply.code(404).send({ error: "session_not_found_or_not_revocable" });
+      return reply.code(204).send();
+    } catch (error) {
+      request.log.error({ err: error }, "Operator session revocation unavailable");
+      return reply.code(503).send({ error: "operator_auth_unavailable" });
+    }
+  }
+);
+
 app.post<{ Params: { indicatorId: string } }>(
   "/v1/threat-intelligence/:indicatorId/review",
   async (request, reply) => {
