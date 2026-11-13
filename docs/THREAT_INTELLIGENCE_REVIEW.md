@@ -15,7 +15,7 @@
 
 ## Review transaction
 
-The local API accepts a bearer session and review request. The service hashes the token; the `SECURITY DEFINER` review function independently verifies that session, resolves the tenant and operator, checks the persisted role, sets transaction-local trusted context, performs the status-only update, and records the operator UUID in the same transaction. A caller cannot choose the actor or tenant. The legacy `onishield_reviewer` role has no direct review privileges; CI verifies that both the runtime role and this legacy role are denied. This endpoint remains loopback-only until remote authentication and transport controls are reviewed.
+The local API requires a bearer session and a successful password reauthentication within the previous five minutes. The step-up function marks the validated session after password verification; the `SECURITY DEFINER` review function independently verifies the session, step-up timestamp and persisted role, resolves tenant/operator identity, sets transaction-local trusted context, performs the status-only update, and records the operator UUID in the same transaction. A caller cannot choose the actor or tenant. The legacy `onishield_reviewer` role has no direct review privileges; CI verifies that both the runtime role and this legacy role are denied. This endpoint remains loopback-only until remote authentication and transport controls are reviewed.
 
 ## Validation
 
