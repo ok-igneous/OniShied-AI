@@ -16,16 +16,17 @@
 - Reviewer-only threat-indicator status transitions, a required review reason, and trigger-generated status audit records.
 - PostgreSQL smoke tests for event RLS, threat-intelligence RLS, reviewer authorization/audit controls, and operator identity permissions.
 - Operator identity and tenant-membership schema; scrypt password verification, opaque session tokens, dedicated auth database role/pool, narrow SECURITY DEFINER credential/session functions, tenant-bound session validation/revocation, and deny-by-default role/action authorization bound to a validated session.
-- Operator-auth service unit tests for successful login, wrong password, inactive account, missing tenant membership, token digest handling, logout, and authorization.
+- Operator-auth service unit tests for successful login, wrong password, inactive account, missing tenant membership, token digest handling, logout, session-bound authorization, persistent throttle enforcement, and authenticated review attribution.
+- PostgreSQL-backed login throttling by hashed email and source IP (five attempts per 15 minutes, then a 15-minute lock), plus a database smoke test.
+- Loopback-only operator login, session introspection, logout, and threat-indicator review API routes. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
 - CI workflow configured to provision PostgreSQL, apply migrations, execute database smoke tests, run unit tests, type-check, and build.
 
 ## Important implementation boundaries
 
 - Threat-intelligence matching is an internal callable service; it is not wired into event ingestion or an autonomous response path.
-- Human operator login is implemented as an internal service only. No public login/logout route is exposed. The service requires the dedicated `onishield_auth` database connection; the normal `onishield_app` role cannot read password hashes or session digests, or modify memberships. Persistent rate limiting, credential-stuffing defenses, invitation, email verification, recovery, browser/mobile token transport, CSRF controls, and authentication audit integration remain unimplemented.
-- The reviewer role is a lab control, not a production identity system. The current lab bootstrap grants it to the migrator login for testability. Production must use individually attributable reviewer identities or a separately authenticated review service.
-- The audit records the PostgreSQL session identity. A shared database login is not sufficient attribution for production.
+- Human operator routes exist only on the server's current `127.0.0.1` listener and require the dedicated `onishield_auth` database connection. Do not expose them remotely. The normal `onishield_app` role cannot read password hashes or session digests, or modify memberships. Persistent account/IP throttling and operator-attributed review audit are implemented but unverified. Invitation, email verification, recovery, session rotation, remote browser/mobile token transport, TLS/origin controls, and throttle-retention cleanup remain unimplemented.
+- The legacy reviewer database role remains a lab control. The authenticated review API now validates an operator session in PostgreSQL and records the persisted operator UUID in each new review audit row. Production still needs a reviewed identity lifecycle and privileged step-up controls.
 - TLP disclosure-policy evaluator and unit tests are implemented as an isolated policy primitive. It is not connected to authenticated read/report/export endpoints; caller identity and community/organization/named-recipient membership must come from trusted server-side authorization, not request fields.
 - Automatic threat-feed ingestion, global intelligence, cross-tenant sharing, public review APIs, AI approvals, and automated blocking are not implemented.
 - No AI agent or response execution is authorized by the current foundation.
@@ -40,8 +41,8 @@ A successful CI run must be observed before treating the database controls or ap
 
 1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure.
 2. Run the disposable Linux lab end-to-end and verify event ingestion, duplicate handling, tenant isolation, and indicator matching against PostgreSQL.
-3. Complete authentication rate limiting, credential-stuffing defenses, account lifecycle/recovery, secure browser/mobile token transport, CSRF controls, and authentication audit integration before exposing login endpoints.
-4. Replace the shared lab reviewer membership with individually attributable reviewer identities and connect them to immutable review audit records.
+3. Complete account lifecycle/recovery, session rotation, remote browser/mobile token transport, TLS/origin policy, secure client storage, throttle retention, and step-up authentication before exposing operator routes beyond loopback.
+4. Provision production reviewer accounts and independently review authenticated review/audit controls.
 5. Integrate TLP enforcement into authenticated read/report/export paths with persisted recipient scope and verify append-only audit retention/backup controls.
 6. Only then integrate deterministic detections and read-only AI investigation.
 7. Keep response execution disabled until policy authorization, human approval, rollback, and audit controls have independent tests.
