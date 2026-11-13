@@ -122,6 +122,8 @@ BEGIN
     updated_at=NOW()
   WHERE onishield.operator_mfa_credentials.enabled_at IS NULL;
   IF NOT FOUND THEN RETURN FALSE; END IF;
+  UPDATE onishield.operator_sessions SET mfa_enrollment_step_up_at=NULL
+  WHERE token_hash=p_session_hash;
   INSERT INTO onishield.operator_mfa_audit(operator_id,action)
     VALUES(trusted.operator_id,'enrollment_started');
   RETURN TRUE;
