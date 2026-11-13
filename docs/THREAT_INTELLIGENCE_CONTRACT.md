@@ -1,19 +1,31 @@
 # Threat Intelligence Service Contract
 
-**Status:** Design only; no service is implemented.  
-**Initial mode:** Curated synthetic indicators only.
+**Status:** Database schema committed; service, normalization, matching, review workflow, and tests are not implemented.  
+**Initial mode:** Tenant-scoped curated synthetic indicators only.
 
 ## Purpose and boundaries
 
 Store and evaluate provenance-backed threat context that may help explain a detection. An indicator match is contextual evidence, not proof of compromise and never an authorization to respond.
 
-Initial scope is synthetic indicators and manually curated records. Automatic public-feed ingestion, commercial feeds, TAXII/STIX integrations, cross-tenant sharing, and automatic blocking are deferred. Before any feed is connected, review licensing, redistribution rights, privacy, rate limits, expiry, and deletion terms.
+Initial scope is synthetic indicators and manually curated records. Automatic public-feed ingestion, commercial feeds, TAXII/STIX integrations, cross-tenant sharing, global intelligence, and automatic blocking are deferred. Before any feed is connected, review licensing, redistribution rights, privacy, rate limits, expiry, and deletion terms.
+
+## Database model (migration 003)
+
+- `threat_intelligence_sources`: tenant-owned source identity, source kind, and mandatory license reference.
+- `threat_indicators`: tenant-owned immutable-version records with normalized value, source provenance, validity, confidence rubric, assessor, status, TLP, and optional content digest.
+- `threat_indicator_matches`: tenant-owned event references and evidence paths, pinned to an exact indicator version and matcher version.
+- Composite tenant foreign keys prevent an indicator from referencing another tenant's source or a match from referencing another tenant's indicator.
+- All three tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
+- Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. Runtime cannot activate, revoke, update, or delete records.
+- Global records have no representation in this first schema. Do not implement global visibility by inserting NULL or special tenant IDs.
+
+The migration is committed but has not been executed against PostgreSQL. No service behavior or isolation test is claimed as verified. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
 
 ## Indicator record
 
 Every record must include:
 - indicator_id: OniShield-generated opaque identifier
-- tenant_id: server-enforced tenant; global curated records use a separately authorized namespace
+- tenant_id: server-enforced tenant; the first schema is tenant-only
 - type: ipv4, ipv6, domain, url, file_hash_sha256, or email_address
 - value_normalized: canonical value
 - source_id and source_record_ref
@@ -37,17 +49,17 @@ Confidence describes confidence in the indicator's correctness, not probability 
 - Match only explicitly mapped event fields.
 - Pending, expired, revoked, and rejected records never match.
 - Record indicator version, event ID, matched field path, matcher version, and match time.
-- Deduplicate by indicator version + event ID + field path.
+- Deduplicate by indicator version + event ID + field path + matcher version.
 
 ## Tenant and handling boundaries
 
-Tenant-provided intelligence is private to that tenant by default. Never promote tenant intelligence to global scope automatically. Global records require separate write permissions and review. Enforce tenant isolation in every query and RLS policy. TLP is a handling restriction, not an authorization substitute.
+Tenant-provided intelligence is private to that tenant by default. Never promote tenant intelligence to global scope automatically. Global records require a separately designed namespace, authorization role, review process, and RLS policy. Enforce tenant isolation in every query and RLS policy. TLP is a handling restriction, not an authorization substitute; reads and exports must enforce it in the service layer and be tested.
 
 ## Internal service operations
 
 - submitIndicator(input, actor): validate and create pending record.
-- reviewIndicator(id, decision, reviewer): activate or reject with audit.
-- revokeIndicator(id, reason, actor): revoke immediately.
+- reviewIndicator(id, decision, reviewer): activate or reject with append-only audit.
+- revokeIndicator(id, reason, actor): revoke immediately with audit.
 - expireIndicators(now): expire stale records and audit transitions.
 - matchEvent(eventRef, tenantContext): return authorized evidence-linked matches.
 - getIndicator(id, tenantContext): return authorized view.
