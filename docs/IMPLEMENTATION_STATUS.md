@@ -5,6 +5,8 @@ Last updated: 2026-11-11
 ## Implemented in repository
 
 - Product vision, architecture, security, team, roadmap, and ADR documentation.
+- Initial deterministic detection scenario catalogue (design only; no rule engine implemented).
+- Controlled competition demonstration runbook with explicit capability-claim boundaries.
 - Mandatory modular-code standard: hard maximum 500 lines per source file.
 - Database security standard covering least privilege, tenant isolation, TLS, backups, and production launch gates.
 - TypeScript/Fastify application scaffold and Zod event contract v0.1.0.
