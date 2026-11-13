@@ -31,10 +31,11 @@ export function registerOperatorAccountRoutes(
     if (!token) return reply.code(401).send({ error: "unauthorized" });
     if (!parsed.success) return reply.code(400).send({ error: "invalid_invitation_request" });
     try {
-      await lifecycle.createInvitation(token, parsed.data);
+      await lifecycle.createInvitation(token, parsed.data, request.ip);
       reply.header("cache-control", "no-store");
       return reply.code(202).send({ status: "invitation_sent" });
     } catch (error) {
+      if (error instanceof Error && /rate limited/.test(error.message)) return reply.code(429).send({ error: "too_many_requests" });
       if (error instanceof Error && /Forbidden/.test(error.message)) {
         return reply.code(403).send({ error: "forbidden" });
       }
@@ -68,11 +69,12 @@ export function registerOperatorAccountRoutes(
     const parsed = tokenSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_verification_token" });
     try {
-      const verified = await lifecycle.verifyEmail(parsed.data.token);
+      const verified = await lifecycle.verifyEmail(parsed.data.token, request.ip);
       if (!verified) return reply.code(400).send({ error: "invalid_or_expired_token" });
       reply.header("cache-control", "no-store");
       return reply.code(204).send();
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && /rate limited/.test(error.message)) return reply.code(429).send({ error: "too_many_requests" });
       return reply.code(400).send({ error: "invalid_or_expired_token" });
     }
   });
@@ -99,11 +101,12 @@ export function registerOperatorAccountRoutes(
     const parsed = passwordSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_password_reset_request" });
     try {
-      const reset = await lifecycle.resetPassword(parsed.data.token, parsed.data.password);
+      const reset = await lifecycle.resetPassword(parsed.data.token, parsed.data.password, request.ip);
       if (!reset) return reply.code(400).send({ error: "invalid_or_expired_token" });
       reply.header("cache-control", "no-store");
       return reply.code(204).send();
     } catch (error) {
+      if (error instanceof Error && /rate limited/.test(error.message)) return reply.code(429).send({ error: "too_many_requests" });
       if (error instanceof Error && /Password must contain/.test(error.message)) {
         return reply.code(400).send({ error: "invalid_password" });
       }
@@ -116,10 +119,11 @@ export function registerOperatorAccountRoutes(
     const parsed = passwordSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_invitation_acceptance" });
     try {
-      const account = await lifecycle.acceptInvitation(parsed.data.token, parsed.data.password);
+      const account = await lifecycle.acceptInvitation(parsed.data.token, parsed.data.password, request.ip);
       reply.header("cache-control", "no-store");
       return reply.code(201).send({ account });
     } catch (error) {
+      if (error instanceof Error && /rate limited/.test(error.message)) return reply.code(429).send({ error: "too_many_requests" });
       if (error instanceof Error && /Password must contain/.test(error.message)) {
         return reply.code(400).send({ error: "invalid_password" });
       }
