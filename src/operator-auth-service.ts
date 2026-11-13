@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { decryptMfaSecret, encryptMfaSecret } from "./operator-mfa-crypto.js";
-import { generateTotpSecret, verifyTotp } from "./operator-mfa-totp.js";
+import { encodeBase32, generateTotpSecret, verifyTotp } from "./operator-mfa-totp.js";
 import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
@@ -34,8 +34,15 @@ function normalizeEmail(email: string): string {
 }
 
 export class OperatorAuthService {
-  constructor(private readonly database: Pick<Pool, "query">, private readonly rateLimitSecret: string) {
+  constructor(
+    private readonly database: Pick<Pool, "query">,
+    private readonly rateLimitSecret: string,
+    private readonly mfaEncryptionKey: string
+  ) {
     if (rateLimitSecret.length < 32) throw new Error("AUTH_RATE_LIMIT_SECRET must contain at least 32 characters");
+    if (!/^[a-fA-F0-9]{64}$/.test(mfaEncryptionKey)) {
+      throw new Error("MFA_ENCRYPTION_KEY must contain exactly 32 bytes encoded as hex");
+    }
   }
 
   private async consumeLoginLimit(key: string, maxAttempts: number): Promise<number> {
