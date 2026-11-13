@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
 import { authPool } from "./database.js";
@@ -8,6 +9,17 @@ export interface OperatorLoginResult { token: string; expiresAt: string; princip
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export class OperatorLoginRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super("Too many login attempts");
+    this.name = "OperatorLoginRateLimitError";
+  }
+}
+
+function throttleKey(scope: "email" | "ip", value: string): string {
+  return createHash("sha256").update(`onishield:operator-login:${scope}:${value}`).digest("hex");
+}
+
 function normalizeEmail(email: string): string {
   const normalized = email.trim().toLowerCase();
   if (normalized.length > 254 || !EMAIL_PATTERN.test(normalized)) throw new Error("Invalid login credentials");
@@ -17,7 +29,15 @@ function normalizeEmail(email: string): string {
 export class OperatorAuthService {
   constructor(private readonly database: Pick<Pool, "query">) {}
 
-  async login(email: string, password: string, tenantId: string): Promise<OperatorLoginResult> {
+  private async consumeLoginLimit(key: string): Promise<number> {
+    const result = await this.database.query<{allowed:boolean;retry_after_seconds:number}>(
+      "SELECT * FROM onishield.consume_operator_login_limit($1,5,900,900)", [key]);
+    const row = result.rows[0];
+    if (!row?.allowed) return Math.max(1, Number(row?.retry_after_seconds ?? 900));
+    return 0;
+  }
+
+  async login(email: string, password: string, tenantId: string, clientIp: string): Promise<OperatorLoginResult> {
     if (password.length < 1 || password.length > 256 || tenantId.trim().length < 1 || tenantId.length > 128) throw new Error("Invalid login credentials");
     const normalizedEmail = normalizeEmail(email);
     const normalizedTenantId = tenantId.trim();
@@ -41,6 +61,8 @@ export class OperatorAuthService {
       await this.logout(token);
       throw new Error("Session creation failed");
     }
+    await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [emailKey]);
+    await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [ipKey]);
     return { token, expiresAt: expiresAt.toISOString(), principal };
   }
 
