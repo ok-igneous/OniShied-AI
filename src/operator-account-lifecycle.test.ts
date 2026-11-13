@@ -83,8 +83,8 @@ test("email verification and password reset consume peppered token digests", asy
 
 test("invalid action tokens and weak passwords fail before database mutation", async () => {
   const { service, calls } = harness(() => ({ rows: [] }));
-  await assert.rejects(() => service.verifyEmail("bad-token"), /Invalid or expired/);
-  await assert.rejects(() => service.acceptInvitation("A".repeat(43), "short"), /Password must contain/);
+  await assert.rejects(() => service.verifyEmail("bad-token", "192.0.2.10"), /Invalid or expired/);
+  await assert.rejects(() => service.acceptInvitation("A".repeat(43), "short", "192.0.2.10"), /Password must contain/);
   assert.equal(calls.length, 0);
 });
 
