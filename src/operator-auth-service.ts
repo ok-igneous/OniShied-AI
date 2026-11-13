@@ -4,7 +4,7 @@ import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPassw
 export interface OperatorPrincipal { tenantId: string; operatorId: string; membershipId: string; email: string; displayName: string; role: string; }
 export interface OperatorLoginResult { token: string; expiresAt: string; principal: OperatorPrincipal; }
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\\.[^\s@]+$/;
 
 function normalizeEmail(email: string): string {
   const normalized = email.trim().toLowerCase();
