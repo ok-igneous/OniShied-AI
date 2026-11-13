@@ -80,6 +80,20 @@ test("wrong passwords fail generically and never create a session", async () => 
   assert.equal(calls.some((call) => call.sql.includes("create_operator_session")), false);
 });
 
+test("unverified email addresses cannot create operator sessions", async () => {
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const { database, calls } = fakeDatabase((sql) => sql.includes("lookup_operator_credentials")
+    ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active", email_verified: false }] }
+    : { rows: [] });
+  await assert.rejects(
+    () => new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32), "cd".repeat(32))
+      .login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
+    /Invalid login credentials/
+  );
+  assert.equal(calls.some((call) => call.sql.includes("lookup_operator_membership")), false);
+  assert.equal(calls.some((call) => call.sql.includes("create_operator_session")), false);
+});
+
 test("inactive accounts and missing tenant memberships cannot create sessions", async () => {
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const inactive = fakeDatabase((sql) => sql.includes("lookup_operator_credentials")
