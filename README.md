@@ -50,6 +50,7 @@ A successful demo is a reproducible end-to-end workflow, not a dashboard mock-up
 - `docs/PRODUCT_VISION.md` — target users, problem, product scope, and demo definition.
 - `docs/SYSTEM_ARCHITECTURE.md` — proposed components and trust boundaries.
 - `docs/SECURITY_MODEL.md` — threat model, safety controls, and security requirements.
+- `docs/THREAT_INTELLIGENCE_CONTRACT.md` — threat intelligence schema, normalization, matching, and service boundaries.
 - `docs/DEVELOPMENT_ROADMAP.md` — staged implementation plan.
 - `docs/TEAM_ROLES.md` — founding team responsibilities and working agreements.
 - `CONTRIBUTING.md` — development workflow and contribution rules.
