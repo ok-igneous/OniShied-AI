@@ -135,16 +135,34 @@ export class OperatorAuthService {
     return { token, expiresAt:expiresAt.toISOString(), principal };
   }
 
-  async beginMfaEnrollment(token: string): Promise<{secret:string;otpauthUrl:string}> {
+  async beginMfaEnrollment(token: string, password: string): Promise<{secret:string;otpauthUrl:string}> {
     const principal = await this.resolve(token);
     if (!principal) throw new Error("unauthorized");
+    if (password.length < 1 || password.length > 256) throw new Error("Invalid step-up credentials");
+    const bucket = throttleKey(this.rateLimitSecret,"email",`mfa-enroll-stepup:${principal.operatorId}`);
+    const retryAfter = await this.consumeLoginLimit(bucket,5);
+    if (retryAfter > 0) throw new OperatorLoginRateLimitError(retryAfter);
+    const credentials = await this.database.query<{password_hash:string;operator_status:string}>(
+      "SELECT * FROM onishield.lookup_operator_credentials($1)",[principal.email]
+    );
+    const account = credentials.rows[0];
+    if (account?.operator_status !== "active" ||
+        !await verifyOperatorPassword(password,account.password_hash)) {
+      throw new Error("Invalid step-up credentials");
+    }
+    const enrollmentStepUp = await this.database.query<{marked:boolean}>(
+      "SELECT onishield.mark_operator_session_mfa_enrollment_step_up($1) AS marked",
+      [hashOperatorSessionToken(token)]
+    );
+    if (enrollmentStepUp.rows[0]?.marked !== true) throw new Error("unauthorized");
     const secret = generateTotpSecret();
     const encrypted = encryptMfaSecret(secret, this.mfaEncryptionKey);
     const stored = await this.database.query<{stored:boolean}>(
       "SELECT onishield.store_pending_operator_mfa($1,$2,$3,$4) AS stored",
       [hashOperatorSessionToken(token), encrypted.ciphertext, encrypted.nonce, encrypted.authTag]
     );
-    if (stored.rows[0]?.stored !== true) throw new Error("Recent password step-up required");
+    if (stored.rows[0]?.stored !== true) throw new Error("MFA enrollment could not be started");
+    await this.database.query("SELECT onishield.reset_operator_login_limit($1)",[bucket]);
     const label = encodeURIComponent(`OniShield AI:${principal.email}`);
     const issuer = encodeURIComponent("OniShield AI");
     return { secret, otpauthUrl:`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30` };
