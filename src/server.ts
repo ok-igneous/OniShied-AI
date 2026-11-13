@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
-import { pool, withTenantTransaction } from "./database.js";
+import { authPool, pool, withTenantTransaction } from "./database.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
@@ -135,6 +135,7 @@ const shutdown = async (signal: string) => {
   app.log.info({ signal }, "Shutting down");
   await app.close();
   await pool.end();
+  await authPool?.end();
   process.exit(0);
 };
 
@@ -147,5 +148,6 @@ try {
 } catch (error) {
   app.log.error(error);
   await pool.end();
+  await authPool?.end();
   process.exit(1);
 }
