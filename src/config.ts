@@ -7,6 +7,7 @@ const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
   AUTH_DATABASE_URL: z.string().min(1).optional(),
   AUTH_RATE_LIMIT_SECRET: z.string().min(32).optional(),
+  MFA_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
   LAB_CONNECTOR_ID: z.string().min(1).max(128),
   LAB_CONNECTOR_TOKEN: z.string().min(32),
@@ -20,6 +21,10 @@ if (!parsed.success) {
     .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
     .join("; ");
   throw new Error(`Invalid environment configuration: ${details}`);
+}
+
+if (parsed.data.AUTH_DATABASE_URL && !parsed.data.MFA_ENCRYPTION_KEY) {
+  throw new Error("MFA_ENCRYPTION_KEY is required when AUTH_DATABASE_URL is configured");
 }
 
 if (parsed.data.AUTH_DATABASE_URL && !parsed.data.AUTH_RATE_LIMIT_SECRET) {
@@ -36,6 +41,7 @@ export const config = {
   databaseUrl: parsed.data.DATABASE_URL,
   authDatabaseUrl: parsed.data.AUTH_DATABASE_URL,
   authRateLimitSecret: parsed.data.AUTH_RATE_LIMIT_SECRET,
+  mfaEncryptionKey: parsed.data.MFA_ENCRYPTION_KEY,
   databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
