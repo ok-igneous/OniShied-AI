@@ -41,6 +41,15 @@ export class OperatorAuthService {
     if (password.length < 1 || password.length > 256 || tenantId.trim().length < 1 || tenantId.length > 128) throw new Error("Invalid login credentials");
     const normalizedEmail = normalizeEmail(email);
     const normalizedTenantId = tenantId.trim();
+    if (!clientIp || clientIp.length > 128) throw new Error("Invalid login credentials");
+    const emailKey = throttleKey("email", normalizedEmail);
+    const ipKey = throttleKey("ip", clientIp);
+    const limits = await Promise.all([
+      this.consumeLoginLimit(emailKey),
+      this.consumeLoginLimit(ipKey)
+    ]);
+    const retryAfter = Math.max(...limits);
+    if (retryAfter > 0) throw new OperatorLoginRateLimitError(retryAfter);
     const credentials = await this.database.query<{operator_id:string;password_hash:string;operator_status:string}>(
       "SELECT * FROM onishield.lookup_operator_credentials($1)", [normalizedEmail]);
     const account = credentials.rows[0];
@@ -62,7 +71,6 @@ export class OperatorAuthService {
       throw new Error("Session creation failed");
     }
     await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [emailKey]);
-    await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [ipKey]);
     return { token, expiresAt: expiresAt.toISOString(), principal };
   }
 
@@ -112,7 +120,7 @@ export class OperatorAuthService {
       oldStatus: row.old_status,
       newStatus: row.new_status,
       actorOperatorId: row.actor_operator_id,
-      changedAt: new Date(row.changed_at).toISOString()
+      changedAt: (row.changed_at instanceof Date ? row.changed_at : new Date(row.changed_at)).toISOString()
     };
   }
 
