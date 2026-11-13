@@ -2,7 +2,9 @@
 -- Remove the earlier password-only step-up function so enrolled accounts cannot bypass TOTP.
 DROP FUNCTION onishield.mark_operator_session_step_up(TEXT);
 
-UPDATE onishield.operator_sessions SET step_up_at=NULL;\n\nCREATE TABLE onishield.operator_mfa_credentials (
+UPDATE onishield.operator_sessions SET step_up_at=NULL;
+
+CREATE TABLE onishield.operator_mfa_credentials (
   operator_id UUID PRIMARY KEY REFERENCES onishield.operators(id) ON DELETE CASCADE,
   pending_ciphertext BYTEA,
   pending_nonce BYTEA,
@@ -234,7 +236,7 @@ DECLARE trusted RECORD;
   mfa_enabled BOOLEAN;
 BEGIN
   IF p_token_hash !~ '^[a-f0-9]{64}$' THEN RETURN FALSE; END IF;
-  SELECT s.id,s.operator_id INTO trusted
+  SELECT s.id,s.operator_id,m.role INTO trusted
   FROM onishield.operator_sessions s
   JOIN onishield.operators o ON o.id=s.operator_id
   JOIN onishield.operator_memberships m
@@ -246,6 +248,9 @@ BEGIN
   SELECT enabled_at IS NOT NULL INTO mfa_enabled
   FROM onishield.operator_mfa_credentials
   WHERE operator_id=trusted.operator_id FOR UPDATE;
+  IF trusted.role IN ('owner','admin','reviewer') AND NOT COALESCE(mfa_enabled,FALSE) THEN
+    RETURN FALSE;
+  END IF;
   IF COALESCE(mfa_enabled,FALSE) THEN
     IF p_counter IS NULL THEN RETURN FALSE; END IF;
     UPDATE onishield.operator_mfa_credentials SET
