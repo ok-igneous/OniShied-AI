@@ -31,6 +31,8 @@
 - TLP disclosure-policy evaluator and unit tests are implemented as an isolated policy primitive. It is not connected to authenticated read/report/export endpoints; caller identity and community/organization/named-recipient membership must come from trusted server-side authorization, not request fields.
 - Automatic threat-feed ingestion, global intelligence, cross-tenant sharing, public review APIs, AI approvals, and automated blocking are not implemented.
 - No AI agent or response execution is authorized by the current foundation.
+- Configurable Autopilot has a normative design contract only: tenant opt-in, default OFF, bounded modes, per-action policy, risk ceilings, human approval for disruptive actions, Tier 3 prohibition, emergency pause, fail-closed checks, and execution audit. No Autopilot policy schema, UI, or executor is implemented.
+- Backup and Disaster Recovery has a normative design contract only: encrypted layered backups, isolated/immutable copies, integrity manifests, tenant-safe restore, clean-room recovery, credential re-enrollment, and restore drills. No backup scheduler, vault integration, restore tooling, or verified recovery capability is implemented.
 
 ## Verification status
 
@@ -45,7 +47,8 @@ A successful CI run must be observed before treating the database controls or ap
 3. Deploy and verify the web-client token pages, Resend sender/domain, invitation/email verification/password-reset flows, device labeling, remote browser/mobile token transport, TLS/origin policy, secure client storage, key rotation/backup, and throttle retention before exposing operator routes beyond loopback.
 4. Provision production reviewer accounts and independently review authenticated review/audit controls.
 5. Integrate TLP enforcement into authenticated read/report/export paths with persisted recipient scope and verify append-only audit retention/backup controls.
-6. Only then integrate deterministic detections and read-only AI investigation.
-7. Keep response execution disabled until policy authorization, human approval, rollback, and audit controls have independent tests.
+6. Implement and test backup/PITR, isolated restore, tenant-safe recovery, key recovery, and measured RPO/RTO before production data is accepted.
+7. Implement Autopilot policy simulation first; keep execution disabled until deterministic detection, read-only investigation, approval, rollback, emergency pause, and audit controls have independent tests.
+8. Only after those gates, implement a reversible lab action and then explicitly opt-in low-risk automation. Tier 2 always requires approval; Tier 3 remains excluded.
 
 Do not describe OniShield AI as production-ready, fully protective, or autonomously responding to threats.
