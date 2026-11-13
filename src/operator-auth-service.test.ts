@@ -3,6 +3,8 @@ import test from "node:test";
 import type { Pool } from "pg";
 import { OperatorAuthService } from "./operator-auth-service.js";
 import { hashOperatorPassword, hashOperatorSessionToken } from "./operator-auth-crypto.js";
+import { encryptMfaSecret } from "./operator-mfa-crypto.js";
+import { generateTotpAt, generateTotpSecret } from "./operator-mfa-totp.js";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const principalRow = {
@@ -20,7 +22,8 @@ function fakeDatabase(handler: (sql: string, params: unknown[]) => { rows: unkno
     query: async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
       if (sql.includes("consume_operator_login_limit")) return { rows: [{ allowed: true, retry_after_seconds: 0 }] };
-      return handler(sql, params);
+      const result = handler(sql, params) as {rows:unknown[];rowCount?:number};
+      return {...result,rowCount:result.rowCount ?? result.rows.length};
     }
   } as unknown as Pick<Pool, "query">;
   return { database, calls };
@@ -32,6 +35,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
     if (sql.includes("lookup_operator_credentials")) {
       return { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] };
     }
+    if (sql.includes("get_operator_mfa")) return { rows: [{enabled:false}] };
     if (sql.includes("lookup_operator_membership")) {
       return { rows: [{ membership_id: "7", role: "security_analyst" }] };
     }
@@ -41,7 +45,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
     throw new Error("Unexpected query");
   });
 
-  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters").login(
+  const result = await new OperatorAuthService(database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login(
     "  OPERATOR@EXAMPLE.TEST ", "correct horse battery staple", "tenant-a", "192.0.2.10"
   );
 
@@ -81,7 +85,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "suspended" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(inactive.database, "test-only-rate-limit-secret-with-32-plus-characters").login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
+    () => new OperatorAuthService(inactive.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-a", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(inactive.calls.some((call) => call.sql.includes("lookup_operator_membership")), false);
@@ -90,7 +94,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
     ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] }
     : { rows: [] });
   await assert.rejects(
-    () => new OperatorAuthService(noMembership.database, "test-only-rate-limit-secret-with-32-plus-characters").login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
+    () => new OperatorAuthService(noMembership.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
     /Invalid login credentials/
   );
   assert.equal(noMembership.calls.some((call) => call.sql.includes("create_operator_session")), false);
@@ -243,4 +247,29 @@ test("step-up rejects a wrong password without marking the session", async () =>
     /Invalid step-up credentials/
   );
   assert.equal(calls.some((call) => call.sql.includes("mark_operator_session_step_up")), false);
+});
+
+test("MFA login issues a challenge instead of a session, then consumes a valid TOTP once", async () => {
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const secret = generateTotpSecret();
+  const encrypted = encryptMfaSecret(secret,"ab".repeat(32));
+  const {database,calls} = fakeDatabase((sql) => {
+    if (sql.includes("lookup_operator_credentials")) return {rows:[{operator_id:accountId,password_hash:passwordHash,operator_status:"active"}]};
+    if (sql.includes("lookup_operator_membership")) return {rows:[{membership_id:"7",role:"security_analyst"}]};
+    if (sql.includes("get_operator_mfa")) return {rows:[{enabled:true,ciphertext:encrypted.ciphertext,nonce:encrypted.nonce,auth_tag:encrypted.authTag}]};
+    if (sql.includes("create_operator_login_challenge")) return {rows:[{create_operator_login_challenge:true}]};
+    if (sql.includes("get_operator_login_challenge")) return {rows:[{operator_id:accountId}]};
+    if (sql.includes("consume_operator_login_challenge")) return {rows:[{session_id:"session-1"}],rowCount:1};
+    if (sql.includes("resolve_operator_session")) return {rows:[principalRow]};
+    return {rows:[]};
+  });
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  const login = await service.login("operator@example.test","correct horse battery staple","tenant-a","192.0.2.10");
+  assert.ok("mfaRequired" in login);
+  if (!("mfaRequired" in login)) throw new Error("Expected MFA challenge");
+  assert.equal(calls.some((call)=>call.sql.includes("create_operator_session")),false);
+  const code = generateTotpAt(secret,Date.now());
+  const session = await service.completeMfaLogin(login.challengeToken,code);
+  assert.equal(session.principal.operatorId,accountId);
+  assert.ok(calls.some((call)=>call.sql.includes("consume_operator_login_challenge")));
 });
