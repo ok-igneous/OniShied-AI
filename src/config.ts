@@ -32,6 +32,10 @@ if (parsed.data.AUTH_DATABASE_URL && !parsed.data.AUTH_RATE_LIMIT_SECRET) {
   throw new Error("AUTH_RATE_LIMIT_SECRET is required when AUTH_DATABASE_URL is configured");
 }
 
+if (parsed.data.AUTH_DATABASE_URL && !parsed.data.MFA_RECOVERY_PEPPER) {
+  throw new Error("MFA_RECOVERY_PEPPER is required when AUTH_DATABASE_URL is configured");
+}
+
 if (parsed.data.APP_ENV === "production" && parsed.data.DATABASE_SSL !== "true") {
   throw new Error("DATABASE_SSL=true is required in production");
 }
