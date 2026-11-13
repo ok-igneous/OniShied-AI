@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { decryptMfaSecret, encryptMfaSecret } from "./operator-mfa-crypto.js";
 import { generateTotpSecret, verifyTotp } from "./operator-mfa-totp.js";
 import { isIP } from "node:net";
@@ -37,12 +37,28 @@ export class OperatorAuthService {
   constructor(
     private readonly database: Pick<Pool, "query">,
     private readonly rateLimitSecret: string,
-    private readonly mfaEncryptionKey: string
+    private readonly mfaEncryptionKey: string,
+    private readonly mfaRecoveryPepper: string
   ) {
     if (rateLimitSecret.length < 32) throw new Error("AUTH_RATE_LIMIT_SECRET must contain at least 32 characters");
     if (!/^[a-fA-F0-9]{64}$/.test(mfaEncryptionKey)) {
       throw new Error("MFA_ENCRYPTION_KEY must contain exactly 32 bytes encoded as hex");
     }
+    if (mfaRecoveryPepper.length < 32) {
+      throw new Error("MFA_RECOVERY_PEPPER must contain at least 32 characters");
+    }
+  }
+
+  private hashRecoveryCode(code: string): string {
+    const normalized = code.trim().toUpperCase();
+    if (!/^[A-F0-9]{32}$/.test(normalized)) throw new Error("Invalid MFA recovery code");
+    return createHmac("sha256", this.mfaRecoveryPepper)
+      .update(`onishield:mfa-recovery:v1:${normalized}`)
+      .digest("hex");
+  }
+
+  private createRecoveryCodes(): string[] {
+    return Array.from({ length: 10 }, () => randomBytes(16).toString("hex").toUpperCase());
   }
 
   private async consumeLoginLimit(key: string, maxAttempts: number): Promise<number> {
@@ -120,17 +136,26 @@ export class OperatorAuthService {
     if (!row?.enabled || !row.ciphertext || !row.nonce || !row.auth_tag) {
       throw new Error("Invalid MFA challenge");
     }
-    const secret = decryptMfaSecret({
-      ciphertext:row.ciphertext, nonce:row.nonce, authTag:row.auth_tag
-    }, this.mfaEncryptionKey);
-    const counter = verifyTotp(secret, code, Date.now());
-    if (counter === null) throw new Error("Invalid MFA code");
     const token = createOperatorSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    const consumed = await this.database.query(
-      "SELECT * FROM onishield.consume_operator_login_challenge($1,$2,$3,$4)",
-      [challengeHash, counter, hashOperatorSessionToken(token), expiresAt]
-    );
+    const sessionHash = hashOperatorSessionToken(token);
+    let consumed;
+    if (/^\\d{6}$/.test(code)) {
+      const secret = decryptMfaSecret({
+        ciphertext:row.ciphertext, nonce:row.nonce, authTag:row.auth_tag
+      }, this.mfaEncryptionKey);
+      const counter = verifyTotp(secret, code, Date.now());
+      if (counter === null) throw new Error("Invalid MFA code");
+      consumed = await this.database.query(
+        "SELECT * FROM onishield.consume_operator_login_challenge($1,$2,$3,$4)",
+        [challengeHash, counter, sessionHash, expiresAt]
+      );
+    } else {
+      consumed = await this.database.query(
+        "SELECT * FROM onishield.consume_operator_login_challenge_with_recovery($1,$2,$3,$4)",
+        [challengeHash, this.hashRecoveryCode(code), sessionHash, expiresAt]
+      );
+    }
     if (consumed.rowCount !== 1) throw new Error("Invalid MFA challenge");
     const principal = await this.resolve(token);
     if (!principal) {
@@ -175,7 +200,7 @@ export class OperatorAuthService {
     return { secret, otpauthUrl:`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30` };
   }
 
-  async confirmMfaEnrollment(token: string, code: string): Promise<void> {
+  async confirmMfaEnrollment(token: string, code: string): Promise<{ recoveryCodes: string[] }> {
     const principal = await this.resolve(token);
     if (!principal) throw new Error("unauthorized");
     const bucket = throttleKey(this.rateLimitSecret, "email", `mfa-enroll:${principal.operatorId}`);
@@ -191,12 +216,15 @@ export class OperatorAuthService {
     },this.mfaEncryptionKey);
     const counter = verifyTotp(secret,code,Date.now());
     if (counter === null) throw new Error("Invalid MFA code");
+    const recoveryCodes = this.createRecoveryCodes();
+    const recoveryHashes = recoveryCodes.map((recoveryCode) => this.hashRecoveryCode(recoveryCode));
     const activated = await this.database.query<{activated:boolean}>(
-      "SELECT onishield.activate_operator_mfa($1,$2) AS activated",
-      [hashOperatorSessionToken(token),counter]
+      "SELECT onishield.activate_operator_mfa($1,$2,$3) AS activated",
+      [hashOperatorSessionToken(token),counter,recoveryHashes]
     );
     if (activated.rows[0]?.activated !== true) throw new Error("MFA enrollment could not be activated");
     await this.database.query("SELECT onishield.reset_operator_login_limit($1)",[bucket]);
+    return { recoveryCodes };
   }
 
   async disableMfa(token: string, password: string, code: string): Promise<void> {
@@ -286,24 +314,36 @@ export class OperatorAuthService {
       enabled:boolean;ciphertext:Buffer;nonce:Buffer;auth_tag:Buffer
     }>("SELECT * FROM onishield.get_operator_mfa($1)",[principal.operatorId]);
     let counter: number | null = null;
+    let usedRecoveryCode = false;
     if (mfaState.rows[0]?.enabled) {
-      const row = mfaState.rows[0];
-      if (!code || !row.ciphertext || !row.nonce || !row.auth_tag) {
-        throw new Error("MFA code required");
+      if (!code) throw new Error("MFA code required");
+      if (/^[A-Fa-f0-9]{32}$/.test(code)) {
+        usedRecoveryCode = true;
+      } else {
+        const row = mfaState.rows[0];
+        if (!/^\\d{6}$/.test(code) || !row.ciphertext || !row.nonce || !row.auth_tag) {
+          throw new Error("Invalid step-up credentials");
+        }
+        const secret = decryptMfaSecret({
+          ciphertext:row.ciphertext,nonce:row.nonce,authTag:row.auth_tag
+        },this.mfaEncryptionKey);
+        counter = verifyTotp(secret,code,Date.now());
+        if (counter === null) throw new Error("Invalid step-up credentials");
       }
-      const secret = decryptMfaSecret({
-        ciphertext:row.ciphertext,nonce:row.nonce,authTag:row.auth_tag
-      },this.mfaEncryptionKey);
-      counter = verifyTotp(secret,code,Date.now());
-      if (counter === null) throw new Error("Invalid step-up credentials");
     } else if (code !== undefined) {
       throw new Error("Invalid step-up credentials");
     }
-    const marked = await this.database.query<{marked:boolean}>(
-      "SELECT onishield.mark_operator_session_step_up($1,$2) AS marked",
-      [hashOperatorSessionToken(token),counter]
-    );
-    if (marked.rows[0]?.marked !== true) throw new Error("unauthorized");
+    const tokenHash = hashOperatorSessionToken(token);
+    const marked = usedRecoveryCode
+      ? await this.database.query<{marked:boolean}>(
+          "SELECT onishield.mark_operator_session_step_up_with_recovery($1,$2) AS marked",
+          [tokenHash,this.hashRecoveryCode(code!)]
+        )
+      : await this.database.query<{marked:boolean}>(
+          "SELECT onishield.mark_operator_session_step_up($1,$2) AS marked",
+          [tokenHash,counter]
+        );
+    if (marked.rows[0]?.marked !== true) throw new Error("Invalid step-up credentials");
     await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [bucket]);
     return {validForSeconds: 300};
   }
