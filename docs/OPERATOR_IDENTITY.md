@@ -10,12 +10,12 @@
 - Session tokens are 256-bit opaque random values. PostgreSQL stores only their SHA-256 digest.
 - Sessions expire within eight hours and can be revoked.
 - Passwords use Node.js scrypt with a random per-password salt and fixed work parameters.
-- The ordinary application DB role cannot read operator rows/password hashes or modify memberships.
+- The ordinary application DB role cannot read operator rows/password hashes or modify memberships. Authentication uses a separate `onishield_auth` database login and connection pool; it has function execution only, not direct table access.
 - Membership and session tables enforce tenant row-level security.
 
 ## Implemented service boundary
 
-- Credential and membership lookup use narrowly granted SECURITY DEFINER functions.
+- Credential and membership lookup use narrowly granted SECURITY DEFINER functions available only to the dedicated `onishield_auth` role. Do not reuse the normal application database connection.
 - Session creation verifies active operator and membership state and caps lifetime at eight hours.
 - Session resolution rejects revoked/expired sessions and inactive accounts/memberships.
 - Session revocation accepts only a validated opaque token and stores/uses its digest.
