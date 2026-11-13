@@ -1,39 +1,47 @@
 # Operator Identity and Authentication
 
-**Status:** Initial identity schema and Node cryptographic primitives are committed. Login, invitation, recovery, session lifecycle endpoints, authorization middleware, and production identity provisioning are not implemented. PostgreSQL execution and unit tests remain unverified while GitHub Actions cannot allocate a runner.
+**Status:** Tenant-bound session persistence, credential lookup, password verification, session validation/revocation, and a deny-by-default permission map are implemented. Human login HTTP routes remain disabled. PostgreSQL execution and CI tests remain unverified because GitHub Actions has been unable to start a runner.
 
 ## Identity model
 
-- An operator account is separate from a tenant membership. One operator may have memberships in multiple tenants.
-- Membership roles are owner, admin, security_analyst, reviewer, and viewer.
-- Membership status must be active before access is granted.
-- Sessions are tenant-bound, expire, and support revocation.
-- The database stores only a SHA-256 digest of a high-entropy opaque session token, never the bearer token.
-- Password hashes use Node.js scrypt with a random per-password salt and fixed, explicit work parameters. Passwords are never stored in plaintext.
-- Password hashes and operator lifecycle records are not readable by the ordinary application database role.
-- Membership and session tables have tenant RLS policies.
+- An operator account is separate from a tenant membership; one operator may belong to multiple tenants.
+- Roles: owner, admin, security_analyst, reviewer, viewer.
+- Only active operators and active tenant memberships can create or resolve sessions.
+- Session tokens are 256-bit opaque random values. PostgreSQL stores only their SHA-256 digest.
+- Sessions expire within eight hours and can be revoked.
+- Passwords use Node.js scrypt with a random per-password salt and fixed work parameters.
+- The ordinary application DB role cannot read operator rows/password hashes or modify memberships.
+- Membership and session tables enforce tenant row-level security.
 
-## Important security boundary
+## Implemented service boundary
 
-This is a schema and cryptographic foundation, not a working login system. Do not expose a login endpoint or accept operator identity from request headers/body based on these files alone. A complete implementation still needs a carefully scoped authentication database function/service for password verification, tenant membership selection, session creation, session lookup, expiry/revocation, rate limiting, lockout/abuse controls, CSRF strategy for browser clients, and audit events.
+- Credential and membership lookup use narrowly granted SECURITY DEFINER functions.
+- Session creation verifies active operator and membership state and caps lifetime at eight hours.
+- Session resolution rejects revoked/expired sessions and inactive accounts/memberships.
+- Session revocation accepts only a validated opaque token and stores/uses its digest.
+- Unknown-account login attempts perform dummy scrypt work to reduce account-enumeration timing differences.
+- Permission checks use a server-defined role/action map and deny unknown roles/actions.
 
-The current lab server authenticates only its configured connector bearer token. It does not authenticate human operators. No human operator is authorized to review threat indicators through an HTTP endpoint.
+Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_app. They require dedicated PostgreSQL security review before production.
 
-## Authorization requirements
+## Deliberately not exposed
 
-- Derive operator, tenant, membership, and role from a validated server-side session.
-- Never accept tenant ID, actor ID, role, community ID, or organization ID as authoritative caller-supplied values.
-- Deny by default when the session is expired/revoked or membership is inactive.
-- Enforce permissions server-side for every action; hiding UI controls is not authorization.
-- Review approval/rejection/revocation requires the reviewer permission and a separate audited database path.
-- Privileged actions require re-authentication or step-up authentication before production release.
-- Log authentication success/failure, session creation/revocation, membership changes, and privileged actions without logging passwords or bearer tokens.
+There is no public login/logout HTTP endpoint. Persistent rate limits, credential-stuffing defenses, account recovery, secure browser/mobile token transport, CSRF policy, and authentication audit integration must be completed first. The existing lab connector endpoint remains separate and does not authenticate human operators.
+
+## Authorization rules
+
+- Derive tenant, operator, membership, and role only from a validated server-side session.
+- Never trust caller-supplied actor IDs, tenant IDs, roles, community IDs, or organization IDs.
+- Deny by default. UI visibility is not authorization.
+- Threat-intelligence review requires reviewer permission and the separately audited database transition.
+- Privileged operations require step-up authentication before production.
+- Never log passwords, raw session tokens, or credential hashes.
 
 ## Release gates
 
-1. Implement authentication persistence without granting broad read access to password hashes.
-2. Add rate limiting, credential stuffing defenses, account recovery, and session revocation.
-3. Implement tenant-scoped authorization middleware and a permission matrix.
-4. Replace shared reviewer DB login with individually attributable reviewer identities.
-5. Connect authenticated identities to immutable review audit records.
-6. Pass unit, integration, RLS, migration, typecheck, and build tests before enabling endpoints.
+1. Add persistent login rate limits and credential-stuffing defenses.
+2. Add invitation, email verification, recovery, and session rotation.
+3. Decide secure browser/mobile token transport and CSRF protections.
+4. Replace shared lab reviewer DB identity with individually attributable reviewers.
+5. Connect operator IDs to immutable review audit records.
+6. Pass PostgreSQL integration, RLS, migration, unit, typecheck, build, and security review.
