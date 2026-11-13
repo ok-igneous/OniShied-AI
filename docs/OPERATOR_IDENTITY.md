@@ -56,7 +56,7 @@ The example is a contract illustration only; no seeded production operator or pa
 - The current server binds to `127.0.0.1`; these endpoints are for the controlled local lab only. Do not expose them through a reverse proxy, public interface, or mobile network.
 - The bearer token must be kept in process memory by a local client and never written to logs, URLs, browser local storage, or analytics. The API does not issue cookies, so cookie-based CSRF is not used.
 - Before remote/browser/mobile deployment, implement TLS termination, strict origin/CORS policy, secure platform token storage, deployment-specific abuse controls, and operational monitoring. The present API is intentionally loopback-only.
-- Account invitation, email verification, password recovery, MFA/TOTP, session device labels, and step-up for actions other than threat-indicator review remain unimplemented. Session inventory, rotation, revocation, and password reauthentication for threat-indicator review are implemented; device fingerprinting is deliberately not inferred from untrusted user-agent strings.
+- Account invitation, email verification, password recovery, complete MFA enrollment/enforcement, session device labels, and step-up for actions other than threat-indicator review remain unimplemented. A standalone TOTP cryptographic module now generates 160-bit Base32 secrets and verifies six-digit SHA-1 TOTP codes with a ±1 time-step window; it is not connected to accounts, encrypted storage, login, or step-up and must not be represented as enabled MFA. Session inventory, rotation, revocation, and password reauthentication for threat-indicator review are implemented; device fingerprinting is deliberately not inferred from untrusted user-agent strings.
 - Rate-limit buckets are HMAC-keyed before persistence; raw email addresses and IP addresses are not stored in the throttle table. `database/maintenance/cleanup_operator_login_limits.sql` deletes buckets untouched for 30 days; schedule it daily with the deployment's trusted database maintenance runner.
 - The existing lab connector endpoint remains separate and does not authenticate human operators.
 
@@ -72,8 +72,9 @@ The example is a contract illustration only; no seeded production operator or pa
 ## Release gates
 
 1. Verify migrations 006–009, login and step-up throttling, five-minute review step-up expiry, session rotation/inventory/revocation, serialized review-versus-revocation behavior, review audit attribution, and all prior PostgreSQL/RLS smoke tests in a successful CI run.
-2. Add invitation, email verification, password recovery, MFA/TOTP, session device labels, and throttle-bucket cleanup scheduling.
+2. Complete MFA: encrypted secret storage, one-time enrollment confirmation, mandatory TOTP on login and privileged step-up, atomic replay prevention, recovery codes, disable/re-enrollment controls, throttling, audit records, and PostgreSQL/API integration tests. The current TOTP module is only a cryptographic primitive.
 3. Design and security-review remote browser/mobile token transport, TLS, origin policy, secure storage, and step-up authentication.
 4. Replace shared lab reviewer DB identity with individually attributable reviewer accounts in the production operations model.
 5. Schedule the 30-day throttle-bucket cleanup, add monitoring, and document abuse-response procedures.
-6. Pass PostgreSQL integration, RLS, migration, unit, typecheck, build, and independent security review.
+6. Select and integrate a transactional email provider before implementing invitation, email verification, and password recovery. Never return recovery tokens in public API responses.
+7. Pass PostgreSQL integration, RLS, migration, unit, typecheck, build, and independent security review.
