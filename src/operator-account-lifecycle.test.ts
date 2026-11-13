@@ -86,3 +86,22 @@ test("invalid action tokens and weak passwords fail before database mutation", a
   await assert.rejects(() => service.acceptInvitation("A".repeat(43), "short"), /Password must contain/);
   assert.equal(calls.length, 0);
 });
+
+test("password-reset provider failures do not disclose whether an account exists", async () => {
+  const database = {
+    query: async (sql: string) => {
+      if (sql.includes("consume_operator_login_limit")) {
+        return { rows: [{ allowed: true, retry_after_seconds: 0 }] };
+      }
+      if (sql.includes("request_operator_password_reset")) {
+        return { rows: [{ action_id: "reset-failure", recipient_email: "operator@example.test" }] };
+      }
+      return { rows: [] };
+    }
+  } as unknown as Pick<Pool, "query">;
+  const failingDelivery: EmailDelivery = {
+    send: async () => { throw new Error("provider unavailable"); }
+  };
+  const service = new OperatorAccountLifecycle(database, failingDelivery, secret, pepper, "https://console.example.test");
+  await assert.doesNotReject(() => service.requestPasswordReset("operator@example.test", "192.0.2.10"));
+});
