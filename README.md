@@ -1,86 +1,91 @@
 # OniShield AI
 
-**AI-assisted cybersecurity operations for businesses and organizations.**
+**Autonomous Cybersecurity Platform — early-stage development.**
 
-OniShield AI is an early-stage cybersecurity product intended to help organizations detect, investigate, explain, and respond to security threats across supported desktop and mobile environments.
+OniShield AI is being developed to help individuals, businesses and organizations collect authorized security telemetry, detect suspicious activity, investigate evidence, apply policy-controlled responses, and recover safely after incidents.
 
-> **Project status:** Planning and foundation setup. This repository does not yet contain a production-ready security agent. All capabilities described here are goals until implemented, tested, and documented.
+> **Project status:** Foundation and design stage. Some backend components exist in the repository but are not yet verified by a successful CI run. This repository does not contain a production-ready endpoint protection agent or a production-ready autonomous response system. Feature descriptions are targets unless explicitly marked implemented and verified.
 
 ## Product direction
 
-OniShield AI is designed around a bounded security-operation workflow:
+OniShield is designed as a hybrid platform:
+- Cloud control plane for identity, tenant administration, policy, coordination and reporting.
+- Local or customer-controlled components for telemetry collection and selected response operations.
+- Desktop operations experience and mobile alert/review/approval experience.
+- Standalone operation, with optional, explicitly authorized OniVend ecosystem integration.
 
-1. Collect authorized security telemetry from a controlled environment.
-2. Detect suspicious events using deterministic rules and supporting signals.
-3. Let AI investigate and correlate evidence; AI output must be traceable to source events.
-4. Assign severity and explain the reasoning, confidence, and uncertainty.
-5. Recommend a proportionate response.
-6. Execute only actions permitted by explicit policy and the configured approval level.
-7. Record the event, evidence, decision, approval, action, and outcome in an auditable log.
+Its intended workflow is:
 
-The product is intended for both businesses and other organizations, with desktop and mobile access and a hybrid deployment model.
+`Telemetry → Validate → Normalize → Detect → Investigate → Policy check → Approval (when required) → Execute → Verify → Audit`
 
-## Safety and trust principles
+AI investigation is advisory. Deterministic server-side policy—not model output—must authorize every response action.
 
-- **Authorized environments only:** no scanning, testing, or intervention against systems without explicit authorization.
-- **Least privilege:** agents and integrations receive only the permissions needed for their assigned tasks.
-- **Bounded autonomy:** low-risk, reversible actions may be automated under policy; destructive, disruptive, or high-impact actions require explicit human approval.
-- **Evidence before claims:** investigations must distinguish observed facts, inferences, confidence, and unknowns.
-- **Human override:** operators can pause automation, revoke credentials, and review action history.
-- **Auditability:** security-relevant decisions and response actions must be attributable and tamper-evident.
-- **Secure by default:** secrets are never committed; customer data is isolated and access-controlled.
+## Product features
+
+The full capability register, including Autopilot, Backup and Recovery, endpoint protection, threat intelligence, AI investigation, identity, reporting and planned integrations, is maintained in [Feature Catalogue](docs/FEATURE_CATALOG.md).
+
+Key design contracts:
+- [Configurable Autopilot](docs/AUTOPILOT_CONTRACT.md) — tenant opt-in, OFF by default, bounded modes, risk tiers, approvals and emergency pause.
+- [Backup and Disaster Recovery](docs/BACKUP_AND_RECOVERY.md) — encrypted and isolated backups, integrity checks, clean-room restore and recovery testing.
+
+These are designs, not implemented customer-facing features.
 
 ## Initial demonstrator
 
-The first demonstrator should use synthetic events or a deliberately controlled lab:
+The first demonstrator should use synthetic events in a controlled lab:
+1. Ingest an authenticated synthetic security event.
+2. Preserve provenance and normalize the event.
+3. Detect a documented suspicious pattern deterministically.
+4. Present evidence-linked investigation results when that service is implemented and tested.
+5. Show a policy decision and approval boundary.
+6. Execute a reversible lab action only after its implementation and tests pass.
+7. Verify and audit the outcome.
 
-- ingest a known suspicious event;
-- preserve the raw event and its provenance;
-- detect and classify it;
-- produce an evidence-backed investigation;
-- recommend a safe containment action;
-- require approval for any disruptive action;
-- execute the approved action in the lab;
-- show the complete audit trail.
+A repeatable end-to-end workflow is more valuable than a broad dashboard mock-up or an unbounded autonomous agent.
 
-A successful demo is a reproducible end-to-end workflow, not a dashboard mock-up or an unbounded autonomous agent.
+## Safety and trust principles
+
+- Authorized environments only.
+- Least privilege and tenant isolation.
+- Evidence before claims; facts, inferences and unknowns remain distinct.
+- AI is advisory and cannot authorize or execute arbitrary actions.
+- Autopilot is opt-in and default OFF; Tier 2 requires human approval and Tier 3 is excluded from the initial product.
+- Backups are isolated from production administrative credentials and are not considered healthy until restore testing succeeds.
+- Human override, emergency pause and auditable decisions.
+- Secrets and customer data must not be committed to this repository.
 
 ## Repository map
 
-- `docs/PRODUCT_VISION.md` — target users, problem, product scope, and demo definition.
+- `docs/FEATURE_CATALOG.md` — product-wide feature inventory and implementation status.
+- `docs/PRODUCT_VISION.md` — mission, target users, initial scope and demonstrator.
 - `docs/SYSTEM_ARCHITECTURE.md` — proposed components and trust boundaries.
-- `docs/SECURITY_MODEL.md` — threat model, safety controls, and security requirements.
-- `docs/THREAT_INTELLIGENCE_CONTRACT.md` — threat intelligence schema, normalization, matching, and service boundaries.
-- `docs/THREAT_INTELLIGENCE_REVIEW.md` — reviewer authorization, status transitions, and append-only audit controls.
-- `docs/OPERATOR_IDENTITY.md` — operator authentication service, isolated database role, authorization matrix, and release gates.
-- `docs/AUTOPILOT_CONTRACT.md` — configurable, opt-in, risk-bounded automation and execution policy.
-- `docs/BACKUP_AND_RECOVERY.md` — encrypted backups, restore validation, and disaster-recovery requirements.
+- `docs/SECURITY_MODEL.md` — threat model and security requirements.
+- `docs/THREAT_INTELLIGENCE_CONTRACT.md` — threat-intelligence design.
+- `docs/THREAT_INTELLIGENCE_REVIEW.md` — reviewer authorization and audit controls.
+- `docs/OPERATOR_IDENTITY.md` — operator authentication and authorization.
+- `docs/AUTOPILOT_CONTRACT.md` — configurable automation contract.
+- `docs/BACKUP_AND_RECOVERY.md` — backup and recovery contract.
 - `docs/DEVELOPMENT_ROADMAP.md` — staged implementation plan.
-- `docs/TEAM_ROLES.md` — founding team responsibilities and working agreements.
-- `CONTRIBUTING.md` — development workflow and contribution rules.
+- `docs/IMPLEMENTATION_STATUS.md` — implemented code, unverified work and blockers.
+- `docs/DEMO_RUNBOOK.md` — controlled demonstration plan.
+- `docs/TEAM_ROLES.md` — contributor responsibilities.
+- `CONTRIBUTING.md` — development workflow.
 - `SECURITY.md` — vulnerability reporting and safe research boundaries.
 
-## Current status
+## Engineering constraints
 
-This repository is the project foundation. Architecture and implementation choices must be validated through small prototypes and documented decisions before being treated as final. No production deployment, customer protection, or security certification is claimed.
+- Follow [Code Standards](docs/CODE_STANDARDS.md), including the hard 500-line source-file ceiling.
+- Follow [Database Security](docs/DATABASE_SECURITY.md) for tenant isolation, least-privilege roles and production launch gates.
+- Follow [Repository Governance](docs/REPOSITORY_GOVERNANCE.md) for CI and contribution controls.
+- Use [Local Lab](docs/LOCAL_LAB.md) only with disposable test data.
+- Review [Public Repository Review](docs/PUBLIC_REPOSITORY_REVIEW.md) before adding sensitive implementation details.
 
-## Working principles
+## Verification and limitations
 
-1. Build a narrow, testable vertical slice before expanding scope.
-2. Prefer deterministic controls for enforcement; use AI for analysis and explanation, not unchecked authority.
-3. Test in isolated labs with synthetic data first.
-4. Require code review for changes to detection, permissions, response, and data handling.
-5. Document limitations and failure modes honestly.
+GitHub Actions has previously failed before runner allocation because of an account billing restriction. Until a successful CI run is observed, migrations, RLS tests, unit tests, type-checking and build are not claimed as passing. Making the repository public does not resolve an account-level billing restriction.
+
+Do not describe OniShield as production-ready, fully protective, or autonomously responding to real threats.
 
 ## License
 
-All rights reserved unless a license is added by the project owner. No permission to reuse, distribute, or deploy this code is granted by this repository's visibility or contents.
-
-## Engineering and database standards
-
-- [Code standards](docs/CODE_STANDARDS.md): mandatory modular design and a hard maximum of 500 lines per source file.
-- [Database security](docs/DATABASE_SECURITY.md): least-privilege roles, PostgreSQL tenant isolation, transaction safety, encryption, backup, and production launch gates.
-- [Repository governance](docs/REPOSITORY_GOVERNANCE.md): GitHub Actions, pull-request workflow, branch-protection status, and contributor controls.
-- [Local lab](docs/LOCAL_LAB.md): PostgreSQL setup, RLS smoke test, and synthetic event replay.
-- [Implementation status](docs/IMPLEMENTATION_STATUS.md): implemented controls, unverified work, and current blockers.
-- [Public repository review](docs/PUBLIC_REPOSITORY_REVIEW.md): current visibility risks and the limits of the history review.
+All rights reserved unless a license is added by the project owner. Repository visibility does not grant permission to reuse, distribute or deploy the code.
