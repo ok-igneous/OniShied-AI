@@ -88,7 +88,10 @@ ALTER TABLE onishield.threat_indicators FORCE ROW LEVEL SECURITY;
 CREATE POLICY threat_indicators_tenant_isolation
   ON onishield.threat_indicators
   USING (tenant_id = current_setting('app.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+  WITH CHECK (
+    tenant_id = current_setting('app.tenant_id', true)
+    AND status = 'pending'
+  );
 
 ALTER TABLE onishield.threat_indicator_matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE onishield.threat_indicator_matches FORCE ROW LEVEL SECURITY;
