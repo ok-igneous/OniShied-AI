@@ -60,7 +60,7 @@ END
 $$;
 RESET ROLE;
 SET LOCAL ROLE onishield_auth;
-DO $
+DO $$
 DECLARE
   credential_count INTEGER;
   session_count INTEGER;
@@ -99,5 +99,5 @@ BEGIN
   SELECT count(*) INTO session_count FROM onishield.resolve_operator_session(digest);
   IF session_count <> 0 THEN RAISE EXCEPTION 'Revoked session still resolves'; END IF;
 END
-$;
+$$;
 ROLLBACK;
