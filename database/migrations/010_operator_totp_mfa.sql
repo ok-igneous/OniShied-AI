@@ -2,7 +2,7 @@
 -- Remove the earlier password-only step-up function so enrolled accounts cannot bypass TOTP.
 DROP FUNCTION onishield.mark_operator_session_step_up(TEXT);
 
-CREATE TABLE onishield.operator_mfa_credentials (
+UPDATE onishield.operator_sessions SET step_up_at=NULL;\n\nCREATE TABLE onishield.operator_mfa_credentials (
   operator_id UUID PRIMARY KEY REFERENCES onishield.operators(id) ON DELETE CASCADE,
   pending_ciphertext BYTEA,
   pending_nonce BYTEA,
