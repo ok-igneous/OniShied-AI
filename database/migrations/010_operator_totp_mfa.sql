@@ -30,6 +30,14 @@ CREATE TABLE onishield.operator_login_challenges (
     REFERENCES onishield.operator_memberships(tenant_id,id,operator_id),
   CHECK (expires_at > created_at)
 );
+CREATE TABLE onishield.operator_mfa_audit (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  operator_id UUID NOT NULL REFERENCES onishield.operators(id),
+  action TEXT NOT NULL CHECK (action IN ('enrollment_started','enabled','disabled','login_verified','step_up')),
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX operator_mfa_audit_operator_idx
+  ON onishield.operator_mfa_audit(operator_id,occurred_at DESC);
 CREATE INDEX operator_login_challenges_expiry_idx
   ON onishield.operator_login_challenges(expires_at);
 REVOKE ALL ON onishield.operator_mfa_credentials, onishield.operator_login_challenges
@@ -63,10 +71,10 @@ BEGIN
  IF NOT FOUND THEN RETURN FALSE; END IF;
  INSERT INTO onishield.operator_mfa_credentials
   (operator_id,pending_ciphertext,pending_nonce,pending_tag,active_ciphertext,active_nonce,active_tag,enabled_at,last_totp_counter)
- VALUES (trusted.operator_id,p_ciphertext,p_nonce,p_auth_tag,NULL,NULL,NULL,NULL,-1)
+ VALUES (trusted.operator_id,p_ciphertext,p_nonce,p_auth_tag,NOW()+INTERVAL '10 minutes',NULL,NULL,NULL,NULL,-1)
  ON CONFLICT(operator_id) DO UPDATE SET
   pending_ciphertext=EXCLUDED.pending_ciphertext,pending_nonce=EXCLUDED.pending_nonce,
-  pending_tag=EXCLUDED.pending_tag,updated_at=NOW()
+  pending_tag=EXCLUDED.pending_tag,pending_expires_at=NOW()+INTERVAL '10 minutes',updated_at=NOW()
  WHERE onishield.operator_mfa_credentials.enabled_at IS NULL;
  RETURN FOUND;
 END; $$;
@@ -85,7 +93,7 @@ BEGIN
  IF NOT FOUND THEN RETURN; END IF;
  RETURN QUERY SELECT pending_ciphertext,pending_nonce,pending_tag
  FROM onishield.operator_mfa_credentials
- WHERE operator_id=trusted_operator AND enabled_at IS NULL AND pending_ciphertext IS NOT NULL;
+ WHERE operator_id=trusted_operator AND enabled_at IS NULL AND pending_ciphertext IS NOT NULL\n AND pending_expires_at>NOW();
 END; $;
 
 CREATE FUNCTION onishield.activate_operator_mfa(p_session_hash TEXT,p_counter BIGINT)
@@ -162,7 +170,7 @@ BEGIN
  WHERE operator_id=challenge.operator_id AND enabled_at IS NOT NULL
  AND last_totp_counter<p_counter;
  IF NOT FOUND THEN RAISE EXCEPTION 'Invalid or replayed MFA code'; END IF;
- UPDATE onishield.operator_login_challenges SET consumed_at=NOW()
+ INSERT INTO onishield.operator_mfa_audit(operator_id,action) VALUES(challenge.operator_id,'login_verified');\n UPDATE onishield.operator_login_challenges SET consumed_at=NOW()
  WHERE token_hash=p_challenge_hash AND consumed_at IS NULL;
  IF NOT FOUND THEN RAISE EXCEPTION 'MFA challenge already consumed'; END IF;
  RETURN QUERY INSERT INTO onishield.operator_sessions
