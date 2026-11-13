@@ -99,6 +99,16 @@ BEGIN
     SELECT 1 FROM onishield.get_operator_mfa('10000000-0000-4000-8000-000000000002'::UUID)
     WHERE enabled
   ) THEN RAISE EXCEPTION 'MFA was not activated for the viewer test account'; END IF;
+  IF NOT onishield.mark_operator_session_step_up(repeat('d',64),56) THEN
+    RAISE EXCEPTION 'Fresh viewer TOTP step-up failed';
+  END IF;
+  IF NOT onishield.disable_operator_mfa(repeat('d',64)) THEN
+    RAISE EXCEPTION 'MFA could not be disabled after step-up';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM onishield.get_operator_mfa('10000000-0000-4000-8000-000000000002'::UUID)
+    WHERE enabled
+  ) THEN RAISE EXCEPTION 'MFA disablement did not clear active credentials'; END IF;
 
   BEGIN
     PERFORM * FROM onishield.review_threat_indicator(
