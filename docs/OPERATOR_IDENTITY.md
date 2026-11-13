@@ -35,7 +35,7 @@ Database functions use a fixed search path, are not executable by PUBLIC, and ar
 
 ## Local API contract
 
-The routes are available only when `AUTH_DATABASE_URL` (the dedicated `onishield_auth` login), a separate random `AUTH_RATE_LIMIT_SECRET` of at least 32 characters, and `MFA_ENCRYPTION_KEY` (exactly 32 random bytes encoded as 64 hex characters) are configured.
+The routes are available only when `AUTH_DATABASE_URL` (the dedicated `onishield_auth` login), a separate random `AUTH_RATE_LIMIT_SECRET` of at least 32 characters, `MFA_ENCRYPTION_KEY` (exactly 32 random bytes encoded as 64 hex characters), and a separate random `MFA_RECOVERY_PEPPER` of at least 32 characters are configured.
 
 - `POST /v1/operator/login` accepts JSON `{ "email": "...", "password": "...", "tenantId": "..." }`. Non-enrolled accounts receive a session; enrolled accounts receive an MFA challenge and no session token.
 - `POST /v1/operator/login/verify` accepts `{ "challengeToken": "...", "code": "123456" }` for TOTP or a 32-character recovery code and returns a session only after one factor is atomically consumed.
