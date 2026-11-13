@@ -56,6 +56,10 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
   assert.equal(sessionCall.params[0], hashOperatorSessionToken(result.token));
   assert.notEqual(sessionCall.params[0], result.token);
   assert.equal(calls.some((call) => call.params.includes(result.token)), false);
+  const limitCalls = calls.filter((call) => call.sql.includes("consume_operator_login_limit"));
+  assert.equal(limitCalls.length, 2);
+  assert.deepEqual(limitCalls.map((call) => call.params[1]), [5, 30]);
+  assert.equal(calls.filter((call) => call.sql.includes("reset_operator_login_limit")).length, 1);
 });
 
 test("wrong passwords fail generically and never create a session", async () => {
