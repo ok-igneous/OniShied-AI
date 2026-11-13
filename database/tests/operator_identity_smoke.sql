@@ -29,6 +29,13 @@ BEGIN
   END;
 
   BEGIN
+    PERFORM token_hash FROM onishield.operator_sessions;
+    RAISE EXCEPTION 'Runtime unexpectedly read operator session digests';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  BEGIN
     UPDATE onishield.operator_memberships SET role = 'owner'
      WHERE tenant_id = 'identity-tenant-a';
     RAISE EXCEPTION 'Runtime unexpectedly modified operator membership';
@@ -69,6 +76,12 @@ BEGIN
     PERFORM password_hash FROM onishield.operators
      WHERE email = 'operator-a@example.test';
     RAISE EXCEPTION 'Auth role unexpectedly has direct operator-table access';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  BEGIN
+    PERFORM token_hash FROM onishield.operator_sessions;
+    RAISE EXCEPTION 'Auth role unexpectedly has direct session-table access';
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
