@@ -67,7 +67,10 @@ DECLARE attempt INTEGER; permitted BOOLEAN;
 BEGIN
   IF has_table_privilege(current_user,'onishield.operators','SELECT')
      OR has_table_privilege(current_user,'onishield.operator_sessions','SELECT')
-     OR has_table_privilege(current_user,'onishield.operator_memberships','SELECT') THEN
+     OR has_table_privilege(current_user,'onishield.operator_memberships','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_mfa_credentials','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_login_challenges','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_mfa_audit','SELECT') THEN
     RAISE EXCEPTION 'Auth service role unexpectedly has direct identity-table access';
   END IF;
 
