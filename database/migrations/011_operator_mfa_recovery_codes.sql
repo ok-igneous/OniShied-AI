@@ -34,8 +34,8 @@ BEGIN
     RETURN FALSE;
   END IF;
   SELECT count(DISTINCT value) INTO unique_hashes
-    FROM unnest(p_recovery_hashes) AS hashes(value)
-   WHERE value ~ '^[a-f0-9]{64}$';
+    FROM unnest(p_recovery_hashes) AS recovery(hash_value)
+   WHERE hash_value ~ '^[a-f0-9]{64}$';
   IF unique_hashes<>10 THEN RETURN FALSE; END IF;
 
   SELECT s.operator_id INTO trusted
@@ -57,7 +57,7 @@ BEGIN
   IF NOT FOUND THEN RETURN FALSE; END IF;
 
   INSERT INTO onishield.operator_mfa_recovery_codes(operator_id,code_hash)
-    SELECT trusted.operator_id,value FROM unnest(p_recovery_hashes) AS hashes(value);
+    SELECT trusted.operator_id,hash_value FROM unnest(p_recovery_hashes) AS recovery(hash_value);
   INSERT INTO onishield.operator_mfa_audit(operator_id,action)
     VALUES(trusted.operator_id,'enabled'),(trusted.operator_id,'recovery_codes_issued');
   RETURN TRUE;
