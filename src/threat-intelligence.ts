@@ -126,8 +126,8 @@ function normalizeEmail(input: string): string {
   if (
     local.length > 64 ||
     local.includes('@') ||
-    !/^[\\x21-\\x7E]+$/.test(local) ||
-    /[\s\u0000-\u001f\u007f]/.test(local) ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+$/.test(local) ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+$/.test(local) ||
     local.startsWith(".") ||
     local.endsWith(".") ||
     local.includes("..")
