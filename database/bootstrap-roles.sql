@@ -13,6 +13,5 @@ CREATE ROLE onishield_auth LOGIN PASSWORD :'auth_password';
 CREATE ROLE onishield_reviewer NOLOGIN;
 
 GRANT onishield_owner TO onishield_migrator;
-GRANT onishield_reviewer TO onishield_migrator;
 
 CREATE DATABASE onishield_lab OWNER onishield_owner;
