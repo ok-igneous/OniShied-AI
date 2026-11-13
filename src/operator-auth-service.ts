@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
 import { authPool } from "./database.js";
 import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPasswordVerification, verifyOperatorPassword } from "./operator-auth-crypto.js";
 
@@ -19,6 +20,7 @@ export class OperatorAuthService {
   async login(email: string, password: string, tenantId: string): Promise<OperatorLoginResult> {
     if (password.length < 1 || password.length > 256 || tenantId.trim().length < 1 || tenantId.length > 128) throw new Error("Invalid login credentials");
     const normalizedEmail = normalizeEmail(email);
+    const normalizedTenantId = tenantId.trim();
     const credentials = await this.database.query<{operator_id:string;password_hash:string;operator_status:string}>(
       "SELECT * FROM onishield.lookup_operator_credentials($1)", [normalizedEmail]);
     const account = credentials.rows[0];
@@ -26,14 +28,14 @@ export class OperatorAuthService {
     const passwordValid = await verifyOperatorPassword(password, account.password_hash);
     if (!passwordValid || account.operator_status !== "active") throw new Error("Invalid login credentials");
     const membership = await this.database.query<{membership_id:string;role:string}>(
-      "SELECT * FROM onishield.lookup_operator_membership($1,$2)", [account.operator_id, tenantId]);
+      "SELECT * FROM onishield.lookup_operator_membership($1,$2)", [account.operator_id, normalizedTenantId]);
     const activeMembership = membership.rows[0];
     if (!activeMembership) throw new Error("Invalid login credentials");
     const token = createOperatorSessionToken();
     const tokenHash = hashOperatorSessionToken(token);
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     await this.database.query("SELECT * FROM onishield.create_operator_session($1,$2,$3,$4,$5)",
-      [tokenHash, tenantId, account.operator_id, activeMembership.membership_id, expiresAt]);
+      [tokenHash, normalizedTenantId, account.operator_id, activeMembership.membership_id, expiresAt]);
     const principal = await this.resolve(token);
     if (!principal) {
       await this.logout(token);
@@ -50,6 +52,14 @@ export class OperatorAuthService {
     const row = result.rows[0];
     if (!row) return null;
     return { tenantId:row.tenant_id, operatorId:row.operator_id, membershipId:row.membership_id, email:row.operator_email, displayName:row.display_name, role:row.role };
+  }
+
+  /** Resolve identity from the opaque session, then enforce the server-side role map. */
+  async authorize(token: string, action: OperatorAction): Promise<OperatorPrincipal> {
+    const principal = await this.resolve(token);
+    if (!principal) throw new Error("unauthorized");
+    assertOperatorPermission(principal.role, action);
+    return principal;
   }
 
   async logout(token: string): Promise<void> {
