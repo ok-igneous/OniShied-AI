@@ -140,6 +140,30 @@ export class OperatorAuthService {
     return result.rows[0]?.revoked === true;
   }
 
+  async stepUp(token: string, password: string): Promise<{validForSeconds: number}> {
+    const principal = await this.resolve(token);
+    if (!principal) throw new Error("unauthorized");
+    if (password.length < 1 || password.length > 256) throw new Error("Invalid step-up credentials");
+    const bucket = throttleKey(this.rateLimitSecret, "email", `step-up:${principal.operatorId}`);
+    const retryAfter = await this.consumeLoginLimit(bucket, 5);
+    if (retryAfter > 0) throw new OperatorLoginRateLimitError(retryAfter);
+    const credentials = await this.database.query<{password_hash:string;operator_status:string}>(
+      "SELECT * FROM onishield.lookup_operator_credentials($1)", [principal.email]
+    );
+    const account = credentials.rows[0];
+    const valid = account?.operator_status === "active" && account.password_hash
+      ? await verifyOperatorPassword(password, account.password_hash)
+      : false;
+    if (!valid) throw new Error("Invalid step-up credentials");
+    const marked = await this.database.query<{marked:boolean}>(
+      "SELECT onishield.mark_operator_session_step_up($1) AS marked",
+      [hashOperatorSessionToken(token)]
+    );
+    if (marked.rows[0]?.marked !== true) throw new Error("unauthorized");
+    await this.database.query("SELECT onishield.reset_operator_login_limit($1)", [bucket]);
+    return {validForSeconds: 300};
+  }
+
   async reviewThreatIndicator(
     token: string,
     indicatorId: number,
