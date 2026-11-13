@@ -6,4 +6,4 @@ SET ROLE onishield_owner;
 \i database/grant-runtime-privileges.sql
 REVOKE INSERT ON onishield.threat_intelligence_sources FROM onishield_app;
 \i database/migrations/004_threat_indicator_review.sql
-\n\\i database/migrations/005_operator_identity.sql\n
+\i database/migrations/005_operator_identity.sql
