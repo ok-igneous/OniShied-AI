@@ -22,7 +22,7 @@
 - Threat-intelligence matching is an internal callable service; it is not wired into event ingestion or an autonomous response path.
 - The reviewer role is a lab control, not a production identity system. The current lab bootstrap grants it to the migrator login for testability. Production must use individually attributable reviewer identities or a separately authenticated review service.
 - The audit records the PostgreSQL session identity. A shared database login is not sufficient attribution for production.
-- TLP-aware read/export authorization is not implemented.
+- TLP disclosure-policy evaluator and unit tests are implemented as an isolated policy primitive. It is not connected to authenticated read/report/export endpoints; caller identity and community/organization/named-recipient membership must come from trusted server-side authorization, not request fields.
 - Automatic threat-feed ingestion, global intelligence, cross-tenant sharing, public review APIs, AI approvals, and automated blocking are not implemented.
 - No AI agent or response execution is authorized by the current foundation.
 
@@ -37,7 +37,7 @@ A successful CI run must be observed before treating the database controls or ap
 1. Obtain a successful CI run and resolve every migration, test, type-check, and build failure.
 2. Run the disposable Linux lab end-to-end and verify event ingestion, duplicate handling, tenant isolation, and indicator matching against PostgreSQL.
 3. Replace the shared lab reviewer membership with an individually attributable review identity model.
-4. Implement and test TLP read/export enforcement and append-only audit retention/backup controls.
+4. Integrate TLP enforcement into authenticated read/report/export paths with persisted recipient scope and verify append-only audit retention/backup controls.
 5. Only then integrate deterministic detections and read-only AI investigation.
 6. Keep response execution disabled until policy authorization, human approval, rollback, and audit controls have independent tests.
 
