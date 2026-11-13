@@ -49,6 +49,7 @@ export class IndicatorValidationError extends Error {
 }
 
 const MAX_VALUE_LENGTH = 2048;
+const MAX_MATCH_CANDIDATES = 10_000;
 const SHA256_PATTERN = /^[a-fA-F0-9]{64}$/;
 const DOMAIN_LABEL_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -212,6 +213,9 @@ export function matchThreatIndicators(input: {
   matcherVersion?: string;
 }): IndicatorMatch[] {
   const now = input.now ?? new Date();
+  if (input.indicators.length > MAX_MATCH_CANDIDATES) {
+    throw new IndicatorValidationError("Indicator candidate limit exceeded");
+  }
   if (!input.eventId || input.eventId.length > 128) {
     throw new IndicatorValidationError('A valid event ID is required');
   }
@@ -220,6 +224,9 @@ export function matchThreatIndicators(input: {
   }
   const nowMs = now.getTime();
   const matcherVersion = input.matcherVersion ?? "exact-v1";
+  if (!matcherVersion || matcherVersion.length > 64) {
+    throw new IndicatorValidationError("Invalid matcher version");
+  }
   const fields = mappedEventFields(input.data);
   const matches = new Map<string, IndicatorMatch>();
 
