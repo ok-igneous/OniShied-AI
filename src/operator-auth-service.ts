@@ -1,4 +1,5 @@
-import type { Pool } from "pg";\nimport { authPool } from "./database.js";
+import type { Pool } from "pg";
+import { authPool } from "./database.js";
 import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPasswordVerification, verifyOperatorPassword } from "./operator-auth-crypto.js";
 
 export interface OperatorPrincipal { tenantId: string; operatorId: string; membershipId: string; email: string; displayName: string; role: string; }
