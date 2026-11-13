@@ -10,6 +10,11 @@ interface StoredEventRow {
   event_json: unknown;
 }
 
+interface StoredMatchRow {
+  id: string;
+  matched_at: string;
+}
+
 interface StoredIndicatorRow {
   id: string;
   version: number;
@@ -89,26 +94,53 @@ export async function matchStoredEventIndicators(input: {
       indicators
     });
 
+    const persistedMatches: Array<typeof matches[number] & {
+      tenant_id: string;
+      match_id: string;
+    }> = [];
+
     for (const match of matches) {
-      await client.query(
+      const values = [
+        input.tenantId,
+        match.event_id,
+        match.indicator_id,
+        match.indicator_version,
+        match.matched_field_path,
+        match.matcher_version
+      ];
+
+      const inserted = await client.query<StoredMatchRow>(
         "INSERT INTO onishield.threat_indicator_matches " +
         "(tenant_id, event_id, indicator_id, indicator_version, " +
         "matched_field_path, matcher_version, matched_at) " +
         "VALUES ($1, $2, $3, $4, $5, $6, $7) " +
         "ON CONFLICT (tenant_id, event_id, indicator_id, indicator_version, " +
-        "matched_field_path, matcher_version) DO NOTHING",
-        [
-          input.tenantId,
-          match.event_id,
-          match.indicator_id,
-          match.indicator_version,
-          match.matched_field_path,
-          match.matcher_version,
-          match.matched_at
-        ]
+        "matched_field_path, matcher_version) DO NOTHING " +
+        "RETURNING id::text, matched_at::text",
+        [...values, match.matched_at]
       );
+
+      const stored = inserted.rows[0] ?? (await client.query<StoredMatchRow>(
+        "SELECT id::text, matched_at::text " +
+        "FROM onishield.threat_indicator_matches " +
+        "WHERE tenant_id = $1 AND event_id = $2 AND indicator_id = $3 " +
+        "AND indicator_version = $4 AND matched_field_path = $5 " +
+        "AND matcher_version = $6",
+        values
+      )).rows[0];
+
+      if (!stored) {
+        throw new Error("Persisted threat indicator match could not be read");
+      }
+
+      persistedMatches.push({
+        ...match,
+        tenant_id: input.tenantId,
+        match_id: stored.id,
+        matched_at: stored.matched_at
+      });
     }
 
-    return matches;
+    return persistedMatches;
   });
 }
