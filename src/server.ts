@@ -3,11 +3,11 @@ import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
 import { authPool, pool, withTenantTransaction } from "./database.js";
-import { createOperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
+import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
-const operatorAuth = authPool ? createOperatorAuthService() : null;
+const operatorAuth = authPool ? new OperatorAuthService(authPool) : null;
 const operatorLoginSchema = z.object({
   email: z.string().min(3).max(254),
   password: z.string().min(1).max(256),
