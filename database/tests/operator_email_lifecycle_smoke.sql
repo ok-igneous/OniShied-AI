@@ -36,9 +36,12 @@ BEGIN
     WHERE email='new-operator@example.test' AND role='security_analyst') THEN
     RAISE EXCEPTION 'Invitation acceptance failed';
   END IF;
-  IF EXISTS(SELECT 1 FROM onishield.accept_operator_invitation(invite_hash,password_hash)) THEN
+  BEGIN
+    PERFORM * FROM onishield.accept_operator_invitation(invite_hash,password_hash);
     RAISE EXCEPTION 'Invitation token was reusable';
-  END IF;
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='Invitation token was reusable' THEN RAISE; END IF;
+  END;
 
   IF NOT EXISTS(SELECT 1 FROM onishield.request_operator_password_reset(
     'new-operator@example.test',reset_hash,NOW()+INTERVAL '20 minutes')
