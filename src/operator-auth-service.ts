@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool } from "pg";\nimport { authPool } from "./database.js";
 import { createOperatorSessionToken, hashOperatorSessionToken, performDummyPasswordVerification, verifyOperatorPassword } from "./operator-auth-crypto.js";
 
 export interface OperatorPrincipal { tenantId: string; operatorId: string; membershipId: string; email: string; displayName: string; role: string; }
@@ -56,4 +56,10 @@ export class OperatorAuthService {
     try { tokenHash = hashOperatorSessionToken(token); } catch { return; }
     await this.database.query("SELECT onishield.revoke_operator_session($1)", [tokenHash]);
   }
+}
+
+/** Create the service only when the dedicated auth connection is configured. */
+export function createOperatorAuthService(): OperatorAuthService {
+  if (!authPool) throw new Error("AUTH_DATABASE_URL is required for operator authentication");
+  return new OperatorAuthService(authPool);
 }
