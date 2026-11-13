@@ -18,6 +18,7 @@ Initial scope is synthetic indicators and manually curated records. Automatic pu
 - All three tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
 - Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. The migration runner explicitly revokes the generic runtime INSERT grant on sources.
 - Runtime indicator inserts are constrained by RLS to `pending` status. Runtime cannot activate, revoke, update, or delete records.
+- Reviewer-only status transitions and append-only audit controls are specified in [THREAT_INTELLIGENCE_REVIEW.md](./THREAT_INTELLIGENCE_REVIEW.md).
 - Global records have no representation in this first schema. Do not implement global visibility by inserting NULL or special tenant IDs.
 
 The migration is committed but has not been executed against PostgreSQL. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
