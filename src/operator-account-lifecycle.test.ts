@@ -31,9 +31,9 @@ function harness(handler: (sql: string, params: unknown[]) => { rows: unknown[] 
 }
 
 test("invitation stores only a token digest and sends a fragment link through Resend", async () => {
-  const { service, calls, sent } = harness(() => ({
-    rows: [{ action_id: "00000000-0000-4000-8000-000000000001", recipient_email: "new@example.test" }]
-  }));
+  const { service, calls, sent } = harness((sql) => sql.includes("resolve_operator_session")
+    ? { rows: [{ role: "owner" }] }
+    : { rows: [{ action_id: "00000000-0000-4000-8000-000000000001", recipient_email: "new@example.test" }] });
   await service.createInvitation("A".repeat(43), {
     email: " NEW@EXAMPLE.TEST ", displayName: "New Operator", role: "security_analyst"
   }, "192.0.2.10");
