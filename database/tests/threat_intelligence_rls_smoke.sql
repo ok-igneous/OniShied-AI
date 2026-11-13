@@ -51,7 +51,7 @@ ON CONFLICT (
   matched_field_path, matcher_version
 ) DO NOTHING;
 
-DO $
+DO $$
 DECLARE
   match_count INTEGER;
 BEGIN
@@ -79,7 +79,7 @@ BEGIN
       NULL;
   END;
 END
-$;
+$$;
 
 SELECT set_config('app.tenant_id', 'ti-tenant-b', true);
 
