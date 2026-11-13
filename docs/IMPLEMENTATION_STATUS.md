@@ -6,6 +6,8 @@ Last updated: 2026-11-11
 
 - Product vision, architecture, security, team, roadmap, and ADR documentation.
 - Initial deterministic detection scenario catalogue (design only; no rule engine implemented).
+- Threat intelligence service contract (design only; no feed ingestion or matching implementation).
+- AI investigation engine contract (design only; no model provider, orchestration, or investigation API implemented).
 - Controlled competition demonstration runbook with explicit capability-claim boundaries.
 - Mandatory modular-code standard: hard maximum 500 lines per source file.
 - Database security standard covering least privilege, tenant isolation, TLS, backups, and production launch gates.
