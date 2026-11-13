@@ -15,6 +15,9 @@ SELECT tenant_id,'auth-review-indicator',1,'domain','review-malware.test',id,
 FROM onishield.threat_intelligence_sources
 WHERE source_key='auth-review-source';
 
+SELECT set_config('app.test_indicator_id',
+  (SELECT id::TEXT FROM onishield.threat_indicators WHERE indicator_key='auth-review-indicator'), true);
+
 INSERT INTO onishield.operators(id,email,password_hash,display_name,status)
 VALUES ('10000000-0000-4000-8000-000000000001','reviewer@example.test',
         'test-only-not-a-real-password-hash','Test Reviewer','active');
@@ -46,7 +49,7 @@ BEGIN
 
   PERFORM * FROM onishield.review_threat_indicator(
     repeat('a',64),
-    (SELECT id FROM onishield.threat_indicators WHERE indicator_key='auth-review-indicator'),
+    current_setting('app.test_indicator_id')::BIGINT,
     'active',
     'Verified synthetic source provenance.'
   );
@@ -59,12 +62,10 @@ DECLARE actor UUID; approved_count INTEGER;
 BEGIN
   SELECT actor_operator_id INTO actor
     FROM onishield.threat_indicator_status_audit
-   WHERE indicator_id=(SELECT id FROM onishield.threat_indicators
-                       WHERE indicator_key='auth-review-indicator');
+   WHERE indicator_id=current_setting('app.test_indicator_id')::BIGINT;
   SELECT count(*) INTO approved_count
     FROM onishield.threat_indicator_status_audit
-   WHERE indicator_id=(SELECT id FROM onishield.threat_indicators
-                       WHERE indicator_key='auth-review-indicator')
+   WHERE indicator_id=current_setting('app.test_indicator_id')::BIGINT
      AND old_status='pending' AND new_status='active';
   IF actor IS DISTINCT FROM '10000000-0000-4000-8000-000000000001'::UUID
      OR approved_count <> 1 THEN
