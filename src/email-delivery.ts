@@ -3,6 +3,7 @@ export interface TransactionalEmail {
   subject: string;
   html: string;
   text: string;
+  idempotencyKey: string;
 }
 
 export interface EmailDelivery {
@@ -31,8 +32,12 @@ export class ResendEmailDelivery implements EmailDelivery {
     if (!message.subject.trim() || message.subject.length > 180 || /[\r\n]/.test(message.subject)) {
       throw new Error("Invalid transactional email subject");
     }
-    if (!message.html.trim() || !message.text.trim()) {
+    if (!message.html.trim() || !message.text.trim() || message.html.length > 100_000 || message.text.length > 100_000) {
       throw new Error("Transactional email must include HTML and plain text");
+    }
+
+    if (!/^[A-Za-z0-9._:/-]{1,256}$/.test(message.idempotencyKey)) {
+      throw new Error("Invalid transactional email idempotency key");
     }
 
     let response: Response;
@@ -41,7 +46,8 @@ export class ResendEmailDelivery implements EmailDelivery {
         method: "POST",
         headers: {
           authorization: `Bearer ${this.apiKey}`,
-          "content-type": "application/json"
+          "content-type": "application/json",
+          "idempotency-key": message.idempotencyKey
         },
         body: JSON.stringify({
           from: this.from,
