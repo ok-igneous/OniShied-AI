@@ -319,6 +319,52 @@ test("MFA enrollment reauthenticates password and stores only encrypted secret m
   const store = calls.find(call=>call.sql.includes("store_pending_operator_mfa"));
   assert.ok(store);
   assert.notDeepEqual(store.params[1],Buffer.from(enrollment.secret,"utf8"));
-  await service.confirmMfaEnrollment(token,generateTotpAt(pendingSecret,Date.now()));
-  assert.ok(calls.some(call=>call.sql.includes("activate_operator_mfa")));
+  const confirmed = await service.confirmMfaEnrollment(token,generateTotpAt(pendingSecret,Date.now()));
+  assert.equal(confirmed.recoveryCodes.length,10);
+  assert.ok(confirmed.recoveryCodes.every(code=>/^[A-F0-9]{32}$/.test(code)));
+  const activation = calls.find(call=>call.sql.includes("activate_operator_mfa"));
+  assert.ok(activation);
+  assert.equal((activation.params[2] as string[]).length,10);
+  assert.ok((activation.params[2] as string[]).every(hash=>/^[a-f0-9]{64}$/.test(hash)));
+  assert.ok(!(activation.params[2] as string[]).includes(confirmed.recoveryCodes[0]!));
+});
+
+test("MFA recovery login sends only a peppered digest and creates a session once", async () => {
+  const challengeToken="B".repeat(43);
+  const recoveryCode="C".repeat(32);
+  const encrypted=encryptMfaSecret(generateTotpSecret(),"ab".repeat(32));
+  const {database,calls}=fakeDatabase((sql)=> {
+    if(sql.includes("get_operator_login_challenge")) return {rows:[{operator_id:accountId}]};
+    if(sql.includes("get_operator_mfa")) return {rows:[{enabled:true,ciphertext:encrypted.ciphertext,nonce:encrypted.nonce,auth_tag:encrypted.authTag}]};
+    if(sql.includes("consume_operator_login_challenge_with_recovery")) return {rows:[{session_id:"recovered"}]};
+    if(sql.includes("resolve_operator_session")) return {rows:[principalRow]};
+    return {rows:[]};
+  });
+  const service=new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32),"cd".repeat(32));
+  const result=await service.completeMfaLogin(challengeToken,recoveryCode);
+  assert.equal(result.principal.operatorId,accountId);
+  const consume=calls.find(call=>call.sql.includes("consume_operator_login_challenge_with_recovery"));
+  assert.ok(consume);
+  assert.notEqual(consume.params[1],recoveryCode);
+  assert.match(String(consume.params[1]),/^[a-f0-9]{64}$/);
+});
+
+test("recovery code can provide one-time MFA step-up after password verification", async () => {
+  const token="D".repeat(43);
+  const recoveryCode="E".repeat(32);
+  const passwordHash=await hashOperatorPassword("correct horse battery staple");
+  const encrypted=encryptMfaSecret(generateTotpSecret(),"ab".repeat(32));
+  const {database,calls}=fakeDatabase((sql)=> {
+    if(sql.includes("resolve_operator_session")) return {rows:[{...principalRow,role:"reviewer"}]};
+    if(sql.includes("lookup_operator_credentials")) return {rows:[{password_hash:passwordHash,operator_status:"active"}]};
+    if(sql.includes("get_operator_mfa")) return {rows:[{enabled:true,ciphertext:encrypted.ciphertext,nonce:encrypted.nonce,auth_tag:encrypted.authTag}]};
+    if(sql.includes("mark_operator_session_step_up_with_recovery")) return {rows:[{marked:true}]};
+    return {rows:[]};
+  });
+  const service=new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32),"cd".repeat(32));
+  const result=await service.stepUp(token,"correct horse battery staple",recoveryCode);
+  assert.equal(result.validForSeconds,300);
+  const mark=calls.find(call=>call.sql.includes("mark_operator_session_step_up_with_recovery"));
+  assert.ok(mark);
+  assert.notEqual(mark.params[1],recoveryCode);
 });
