@@ -10,7 +10,9 @@ export type OperatorAction =
   | "threat-intelligence:review"
   | "response:approve";
 
-const ALL_ACTIONS = new Set<OperatorAction>(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review", "response:approve"]);\n\nconst ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> = {
+const ALL_ACTIONS = new Set<OperatorAction>(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review", "response:approve"]);
+
+const ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> = {
   owner: new Set(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review", "response:approve"]),
   admin: new Set(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review"]),
   security_analyst: new Set(["event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read"]),
