@@ -71,6 +71,23 @@ BEGIN
  RETURN FOUND;
 END; $$;
 
+CREATE FUNCTION onishield.get_pending_operator_mfa(p_session_hash TEXT)
+RETURNS TABLE(ciphertext BYTEA,nonce BYTEA,auth_tag BYTEA)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,onishield AS $
+DECLARE trusted_operator UUID;
+BEGIN
+ SELECT s.operator_id INTO trusted_operator FROM onishield.operator_sessions s
+ JOIN onishield.operators o ON o.id=s.operator_id
+ JOIN onishield.operator_memberships m ON m.id=s.membership_id
+  AND m.tenant_id=s.tenant_id AND m.operator_id=s.operator_id
+ WHERE s.token_hash=p_session_hash AND s.revoked_at IS NULL AND s.expires_at>NOW()
+ AND o.status='active' AND m.status='active';
+ IF NOT FOUND THEN RETURN; END IF;
+ RETURN QUERY SELECT pending_ciphertext,pending_nonce,pending_tag
+ FROM onishield.operator_mfa_credentials
+ WHERE operator_id=trusted_operator AND enabled_at IS NULL AND pending_ciphertext IS NOT NULL;
+END; $;
+
 CREATE FUNCTION onishield.activate_operator_mfa(p_session_hash TEXT,p_counter BIGINT)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,onishield AS $$
@@ -204,6 +221,7 @@ END; $$;
 REVOKE ALL ON FUNCTION onishield.get_operator_mfa(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.store_pending_operator_mfa(TEXT,BYTEA,BYTEA,BYTEA) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.activate_operator_mfa(TEXT,BIGINT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.get_pending_operator_mfa(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.create_operator_login_challenge(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.get_operator_login_challenge(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.consume_operator_login_challenge(TEXT,BIGINT,TEXT,TIMESTAMPTZ) FROM PUBLIC;
@@ -212,6 +230,7 @@ REVOKE ALL ON FUNCTION onishield.disable_operator_mfa(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.get_operator_mfa(UUID) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.store_pending_operator_mfa(TEXT,BYTEA,BYTEA,BYTEA) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.activate_operator_mfa(TEXT,BIGINT) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.get_pending_operator_mfa(TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.create_operator_login_challenge(TEXT,TEXT,UUID,BIGINT,TIMESTAMPTZ) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.get_operator_login_challenge(TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.consume_operator_login_challenge(TEXT,BIGINT,TEXT,TIMESTAMPTZ) TO onishield_auth;
