@@ -46,8 +46,16 @@ FROM onishield.operators o
 JOIN onishield.operator_memberships m ON m.operator_id=o.id
 WHERE o.email='viewer@example.test';
 
+-- Seed a second session for the reviewer so same-operator revocation can be checked.
+INSERT INTO onishield.operator_sessions
+  (tenant_id,operator_id,membership_id,token_hash,expires_at)
+SELECT 'auth-review-tenant',o.id,m.id,repeat('f',64),NOW()+INTERVAL '1 hour'
+FROM onishield.operators o
+JOIN onishield.operator_memberships m ON m.operator_id=o.id
+WHERE o.email='reviewer@example.test';
+
 SET LOCAL ROLE onishield_auth;
-DO $$
+DO $
 DECLARE attempt INTEGER; permitted BOOLEAN;
 BEGIN
   IF has_table_privilege(current_user,'onishield.operators','SELECT')
@@ -92,8 +100,37 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'Review accepted a viewer session' THEN RAISE; END IF;
   END;
+    -- Session inventory exposes only metadata and is scoped to the authenticated operator.
+  IF (SELECT count(*) FROM onishield.list_operator_sessions(repeat('a',64))) <> 2 THEN
+    RAISE EXCEPTION 'Session inventory did not return only the review operator sessions';
+  END IF;
+
+  IF NOT onishield.revoke_operator_session_by_id(
+    repeat('a',64),
+    (SELECT id FROM onishield.operator_sessions WHERE token_hash=repeat('f',64))
+  ) THEN
+    RAISE EXCEPTION 'Could not revoke another session belonging to the same operator';
+  END IF;
+
+  IF onishield.revoke_operator_session_by_id(
+    repeat('a',64),
+    (SELECT id FROM onishield.operator_sessions WHERE token_hash=repeat('a',64))
+  ) THEN
+    RAISE EXCEPTION 'Session management must not revoke the current session';
+  END IF;
+
+  PERFORM * FROM onishield.rotate_operator_session(
+    repeat('a',64), repeat('e',64), NOW()+INTERVAL '8 hours'
+  );
+  IF EXISTS (SELECT 1 FROM onishield.resolve_operator_session(repeat('a',64))) THEN
+    RAISE EXCEPTION 'Rotation did not invalidate the old session';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM onishield.resolve_operator_session(repeat('e',64))) THEN
+    RAISE EXCEPTION 'Rotation did not create a valid replacement session';
+  END IF;
+
 END
-$$;
+$;
 
 SET LOCAL ROLE onishield_owner;
 DO $$
