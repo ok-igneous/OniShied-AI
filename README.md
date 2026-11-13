@@ -53,6 +53,8 @@ A successful demo is a reproducible end-to-end workflow, not a dashboard mock-up
 - `docs/THREAT_INTELLIGENCE_CONTRACT.md` — threat intelligence schema, normalization, matching, and service boundaries.
 - `docs/THREAT_INTELLIGENCE_REVIEW.md` — reviewer authorization, status transitions, and append-only audit controls.
 - `docs/OPERATOR_IDENTITY.md` — operator authentication service, isolated database role, authorization matrix, and release gates.
+- `docs/AUTOPILOT_CONTRACT.md` — configurable, opt-in, risk-bounded automation and execution policy.
+- `docs/BACKUP_AND_RECOVERY.md` — encrypted backups, restore validation, and disaster-recovery requirements.
 - `docs/DEVELOPMENT_ROADMAP.md` — staged implementation plan.
 - `docs/TEAM_ROLES.md` — founding team responsibilities and working agreements.
 - `CONTRIBUTING.md` — development workflow and contribution rules.
