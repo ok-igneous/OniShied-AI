@@ -31,9 +31,17 @@ Protect customer systems, tenant data, operator identities, connector credential
 - Encrypt transport and stored sensitive data.
 - Apply tenant isolation and documented retention/deletion rules.
 
+### Threat intelligence safety
+- Treat indicators and feed content as untrusted until validated and provenance-reviewed.
+- Record source, license/handling restrictions, confidence rubric, collection time, validity, and expiry.
+- Tenant intelligence is private by default; global intelligence uses a separately authorized namespace.
+- Exact indicator matches are contextual evidence only and cannot authorize blocking or remediation.
+- Expired, revoked, pending, or rejected indicators must not match.
+
 ### AI safety
 - Treat model responses as untrusted proposals.
 - Treat all retrieved content as untrusted data; never allow it to redefine system policy.
+- Keep investigation read-only with bounded, tenant-authorized evidence tools; no shell, arbitrary network, arbitrary SQL, or response tools.
 - Use structured output validation and evidence references.
 - Limit tools to task-specific read operations unless a separate policy gate authorizes an action.
 - Detect missing evidence and state uncertainty.
