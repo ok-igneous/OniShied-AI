@@ -1,15 +1,21 @@
 -- Verify threat-intelligence tables enforce the same tenant boundary as events.
--- Run as an administrator after migrations; this transaction is fully rolled back.
+-- Source records are provisioned by the owner; runtime can only read them.
+-- This transaction is fully rolled back.
 BEGIN;
-SET LOCAL ROLE onishield_app;
 SELECT set_config('app.tenant_id', 'ti-tenant-a', true);
+SET LOCAL ROLE onishield_owner;
+
+INSERT INTO onishield.threat_intelligence_sources
+  (tenant_id, source_key, display_name, source_kind, license_ref)
+VALUES
+  ('ti-tenant-a', 'synthetic-lab', 'Synthetic lab source', 'synthetic', 'internal-test');
+
+SET LOCAL ROLE onishield_app;
 
 WITH source_row AS (
-  INSERT INTO onishield.threat_intelligence_sources
-    (tenant_id, source_key, display_name, source_kind, license_ref)
-  VALUES
-    ('ti-tenant-a', 'synthetic-lab', 'Synthetic lab source', 'synthetic', 'internal-test')
-  RETURNING tenant_id, id
+  SELECT tenant_id, id
+    FROM onishield.threat_intelligence_sources
+   WHERE source_key = 'synthetic-lab'
 ),
 indicator_row AS (
   INSERT INTO onishield.threat_indicators
@@ -36,12 +42,9 @@ DECLARE
   indicator_count INTEGER;
   match_count INTEGER;
 BEGIN
-  SELECT count(*) INTO source_count
-    FROM onishield.threat_intelligence_sources;
-  SELECT count(*) INTO indicator_count
-    FROM onishield.threat_indicators;
-  SELECT count(*) INTO match_count
-    FROM onishield.threat_indicator_matches;
+  SELECT count(*) INTO source_count FROM onishield.threat_intelligence_sources;
+  SELECT count(*) INTO indicator_count FROM onishield.threat_indicators;
+  SELECT count(*) INTO match_count FROM onishield.threat_indicator_matches;
 
   IF source_count <> 0 OR indicator_count <> 0 OR match_count <> 0 THEN
     RAISE EXCEPTION 'Threat intelligence RLS failed: cross-tenant rows visible';
