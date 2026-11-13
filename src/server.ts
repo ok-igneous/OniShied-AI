@@ -8,7 +8,7 @@ import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
 
 const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey
-  ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey)
+  ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey, config.mfaRecoveryPepper)
   : null;
 const operatorLoginSchema = z.object({
   email: z.string().min(3).max(254),
@@ -226,9 +226,10 @@ app.post("/v1/operator/mfa/confirm", async (request, reply) => {
   if (!token) return reply.code(401).send({error:"unauthorized"});
   if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_code"});
   try {
-    await operatorAuth.confirmMfaEnrollment(token,parsed.data.code);
+    const result = await operatorAuth.confirmMfaEnrollment(token,parsed.data.code);
     reply.header("cache-control","no-store");
-    return reply.code(200).send({mfaEnabled:true});
+    reply.header("pragma","no-cache");
+    return reply.code(200).send({mfaEnabled:true,recoveryCodes:result.recoveryCodes});
   } catch (error) {
     if (error instanceof OperatorLoginRateLimitError) {
       reply.header("retry-after",String(error.retryAfterSeconds));
