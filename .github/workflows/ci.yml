@@ -86,6 +86,13 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/operator_auth_security_smoke.sql
 
+      - name: Verify operator invitation and email lifecycle controls
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \\
+            -v ON_ERROR_STOP=1 -f database/tests/operator_email_lifecycle_smoke.sql
+
       - name: Enforce source-file size limit
         run: npm run check:lines
 
