@@ -68,7 +68,8 @@ export function verifyTotp(
   timestampMs: number,
   window = 1
 ): number | null {
-  if (!/^\d{6}$/.test(code) || !Number.isSafeInteger(window) || window < 0 || window > 1) {
+  if (!Number.isFinite(timestampMs) || timestampMs < 0 ||
+      !/^\d{6}$/.test(code) || !Number.isSafeInteger(window) || window < 0 || window > 1) {
     return null;
   }
   const supplied = Buffer.from(code, "ascii");
