@@ -51,4 +51,36 @@ BEGIN
   END IF;
 END
 $$;
+RESET ROLE;
+SET LOCAL ROLE onishield_auth;
+DO $
+DECLARE
+  credential_count INTEGER;
+  session_count INTEGER;
+  digest TEXT := repeat('a', 64);
+BEGIN
+  SELECT count(*) INTO credential_count
+    FROM onishield.lookup_operator_credentials('operator-a@example.test');
+  IF credential_count <> 1 THEN
+    RAISE EXCEPTION 'Dedicated auth role cannot resolve credentials';
+  END IF;
+  BEGIN
+    PERFORM password_hash FROM onishield.operators
+     WHERE email = 'operator-a@example.test';
+    RAISE EXCEPTION 'Auth role unexpectedly has direct operator-table access';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM * FROM onishield.create_operator_session(
+    digest, 'identity-tenant-a', '00000000-0000-4000-8000-000000000001',
+    (SELECT id FROM onishield.operator_memberships WHERE tenant_id='identity-tenant-a'),
+    NOW() + INTERVAL '1 hour'
+  );
+  SELECT count(*) INTO session_count FROM onishield.resolve_operator_session(digest);
+  IF session_count <> 1 THEN RAISE EXCEPTION 'Session did not resolve'; END IF;
+  PERFORM onishield.revoke_operator_session(digest);
+  SELECT count(*) INTO session_count FROM onishield.resolve_operator_session(digest);
+  IF session_count <> 0 THEN RAISE EXCEPTION 'Revoked session still resolves'; END IF;
+END
+$;
 ROLLBACK;
