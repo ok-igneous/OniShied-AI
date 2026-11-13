@@ -33,7 +33,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const { database, calls } = fakeDatabase((sql) => {
     if (sql.includes("lookup_operator_credentials")) {
-      return { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] };
+      return { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active", email_verified: true }] };
     }
     if (sql.includes("get_operator_mfa")) return { rows: [{enabled:false}] };
     if (sql.includes("lookup_operator_membership")) {
@@ -70,7 +70,7 @@ test("login normalizes email, stores only a token digest, and returns a trusted 
 test("wrong passwords fail generically and never create a session", async () => {
   const passwordHash = await hashOperatorPassword("correct horse battery staple");
   const { database, calls } = fakeDatabase((sql) => sql.includes("lookup_operator_credentials")
-    ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] }
+    ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active", email_verified: true }] }
     : { rows: [] });
 
   await assert.rejects(
@@ -92,7 +92,7 @@ test("inactive accounts and missing tenant memberships cannot create sessions", 
   assert.equal(inactive.calls.some((call) => call.sql.includes("lookup_operator_membership")), false);
 
   const noMembership = fakeDatabase((sql) => sql.includes("lookup_operator_credentials")
-    ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active" }] }
+    ? { rows: [{ operator_id: accountId, password_hash: passwordHash, operator_status: "active", email_verified: true }] }
     : { rows: [] });
   await assert.rejects(
     () => new OperatorAuthService(noMembership.database, "test-only-rate-limit-secret-with-32-plus-characters", "ab".repeat(32),"cd".repeat(32)).login("operator@example.test", "correct horse battery staple", "tenant-b", "192.0.2.10"),
