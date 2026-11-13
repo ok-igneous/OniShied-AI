@@ -6,6 +6,9 @@ import { authPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
+import { ResendEmailDelivery } from "./email-delivery.js";
+import { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
+import { registerOperatorAccountRoutes } from "./operator-account-routes.js";
 
 const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey && config.mfaRecoveryPepper
   ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey, config.mfaRecoveryPepper)
@@ -25,6 +28,18 @@ const app = Fastify({
   bodyLimit: 256 * 1024,
   requestTimeout: 10_000
 });
+
+const accountLifecycle = authPool && config.authRateLimitSecret && config.mfaRecoveryPepper &&
+  config.resendApiKey && config.emailFrom && config.publicUrl
+  ? new OperatorAccountLifecycle(
+      authPool,
+      new ResendEmailDelivery(config.resendApiKey, config.emailFrom),
+      config.authRateLimitSecret,
+      config.mfaRecoveryPepper,
+      config.publicUrl
+    )
+  : null;
+registerOperatorAccountRoutes(app, accountLifecycle);
 
 function authorizedBearer(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
