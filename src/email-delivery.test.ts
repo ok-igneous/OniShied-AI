@@ -12,13 +12,15 @@ test("Resend sends a minimal transactional email and returns provider ID", async
     to: "operator@example.test",
     subject: "Verify your OniShield email",
     html: "<p>Verify</p>",
-    text: "Verify"
+    text: "Verify",
+    idempotencyKey: "verify/email_test_123"
   });
   assert.equal(result.id, "email_test_123");
   assert.equal(captured?.url, "https://api.resend.com/emails");
   assert.equal(captured?.init?.method, "POST");
   const headers = captured?.init?.headers as Record<string, string>;
   assert.equal(headers.authorization, "Bearer re_test_key_123456789012345");
+  assert.equal(headers["idempotency-key"], "verify/email_test_123");
   const body = JSON.parse(String(captured?.init?.body));
   assert.deepEqual(body.to, ["operator@example.test"]);
   assert.equal(body.from, "OniShield <security@example.test>");
@@ -34,13 +36,15 @@ test("Resend rejects malformed recipients and unsafe subjects before network acc
     to: "bad-address",
     subject: "Hello",
     html: "<p>Hello</p>",
-    text: "Hello"
+    text: "Hello",
+    idempotencyKey: "test/invalid-recipient"
   }), /recipient/);
   await assert.rejects(() => delivery.send({
     to: "operator@example.test",
     subject: "Hello\r\nBcc: attacker@example.test",
     html: "<p>Hello</p>",
-    text: "Hello"
+    text: "Hello",
+    idempotencyKey: "test/unsafe-subject"
   }), /subject/);
   assert.equal(called, false);
 });
@@ -52,6 +56,7 @@ test("Resend provider errors are sanitized", async () => {
     to: "operator@example.test",
     subject: "Hello",
     html: "<p>Hello</p>",
-    text: "Hello"
+    text: "Hello",
+    idempotencyKey: "test/provider-error"
   }), /HTTP 401/);
 });
