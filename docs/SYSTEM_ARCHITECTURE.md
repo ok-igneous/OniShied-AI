@@ -12,12 +12,13 @@ Hybrid deployment is the target: a cloud control plane for organization manageme
 2. **Ingestion API** — authenticate connector identity, validate payloads, rate-limit, and attach provenance.
 3. **Event normalization** — convert source-specific records into a versioned canonical event schema.
 4. **Detection engine** — deterministic rules and signals produce reproducible findings.
-5. **Investigation orchestrator** — gathers bounded context and asks AI to summarize evidence, identify gaps, and propose next steps.
-6. **Policy and approval service** — checks actor, tenant, action, target, risk, approval, and policy version before any execution.
-7. **Response executor** — runs a narrow allowlisted set of actions with least privilege, idempotency, timeout, and rollback where possible.
-8. **Audit service** — records event references, model/prompt version where applicable, policy decision, approver, action, result, and timestamps.
-9. **Operator clients** — desktop-first operational console and mobile alert/approval experience.
-10. **Identity and tenant control plane** — organization membership, roles, device enrollment, policy, configuration, and subscription lifecycle.
+5. **Threat intelligence service** — validates, versions, expires, and matches provenance-backed indicators as contextual signals; it never authorizes response. See [THREAT_INTELLIGENCE_CONTRACT.md](THREAT_INTELLIGENCE_CONTRACT.md).
+6. **Investigation orchestrator** — gathers bounded context and asks AI to summarize evidence, identify gaps, and propose next steps. See [INVESTIGATION_ENGINE_CONTRACT.md](INVESTIGATION_ENGINE_CONTRACT.md).
+7. **Policy and approval service** — checks actor, tenant, action, target, risk, approval, and policy version before any execution.
+8. **Response executor** — runs a narrow allowlisted set of actions with least privilege, idempotency, timeout, and rollback where possible.
+9. **Audit service** — records event references, model/prompt version where applicable, policy decision, approver, action, result, and timestamps.
+10. **Operator clients** — desktop-first operational console and mobile alert/approval experience.
+11. **Identity and tenant control plane** — organization membership, roles, device enrollment, policy, configuration, and subscription lifecycle.
 
 ## Trust boundaries
 
