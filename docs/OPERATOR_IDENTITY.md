@@ -22,7 +22,7 @@
 - Unknown-account login attempts perform dummy scrypt work to reduce account-enumeration timing differences.
 - Login attempts are rate-limited in PostgreSQL by HMAC-keyed account and source-IP buckets: five attempts per 15-minute account window and 30 attempts per 15-minute source-IP window, each followed by a 15-minute lock. The account bucket resets after a successful login; the IP bucket ages out naturally. `AUTH_RATE_LIMIT_SECRET` is mandatory whenever `AUTH_DATABASE_URL` is set, preventing offline email/IP guessing from a database-only leak.
 - `POST /v1/operator/login`, `GET /v1/operator/me`, `POST /v1/operator/logout`, `POST /v1/operator/rotate`, `GET /v1/operator/sessions`, and `DELETE /v1/operator/sessions/:sessionId` are exposed only by the current loopback-bound Fastify process. Login and rotation responses are marked `Cache-Control: no-store` and use bearer tokens, not cookies.
-- Session rotation is atomic in PostgreSQL: the current token is revoked and a replacement token is created in the same transaction. The API lists at most 50 session metadata records for the authenticated operator in the active tenant; it never returns token digests. An operator may revoke another session belonging to the same operator and tenant, but cannot revoke the session used to authorize that request.
+- Session rotation is atomic in PostgreSQL: the current token is row-locked, revoked, and replaced in the same transaction. Privileged review and other-session revocation also row-lock the authorizing session so a completed revocation cannot race through an already-started privileged action. The API lists at most 50 session metadata records for the authenticated operator in the active tenant; it never returns token digests. An operator may revoke another session belonging to the same operator and tenant, but cannot revoke the session used to authorize that request.
 - `POST /v1/threat-intelligence/:indicatorId/review` requires a validated session and review permission. PostgreSQL revalidates the session and tenant, derives the operator ID from the stored session, performs the state transition, and writes that operator UUID into the append-only audit record.
 - Unit tests cover normalized login, wrong passwords, inactive accounts, absent tenant membership, session token hashing, logout, and session-bound authorization.
 - Permission checks use a server-defined role/action map and deny unknown roles/actions. The auth service resolves the opaque session first, then authorizes the requested action from the persisted membership role; callers cannot supply a trusted role.
@@ -69,7 +69,7 @@ The example is a contract illustration only; no seeded production operator or pa
 
 ## Release gates
 
-1. Verify migrations 006–007, login throttle behavior, session rotation/inventory/revocation, review audit attribution, and all prior PostgreSQL/RLS smoke tests in a successful CI run.
+1. Verify migrations 006–008, login throttle behavior, session rotation/inventory/revocation, serialized review-versus-revocation behavior, review audit attribution, and all prior PostgreSQL/RLS smoke tests in a successful CI run.
 2. Add invitation, email verification, recovery, session rotation, and device/session management.
 3. Design and security-review remote browser/mobile token transport, TLS, origin policy, secure storage, and step-up authentication.
 4. Replace shared lab reviewer DB identity with individually attributable reviewer accounts in the production operations model.
