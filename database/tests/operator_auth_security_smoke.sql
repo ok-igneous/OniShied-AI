@@ -55,7 +55,7 @@ JOIN onishield.operator_memberships m ON m.operator_id=o.id
 WHERE o.email='reviewer@example.test';
 
 SET LOCAL ROLE onishield_auth;
-DO $
+DO $$
 DECLARE attempt INTEGER; permitted BOOLEAN;
 BEGIN
   IF has_table_privilege(current_user,'onishield.operators','SELECT')
@@ -145,7 +145,7 @@ BEGIN
   END IF;
 
 END
-$;
+$$;
 
 SET LOCAL ROLE onishield_owner;
 DO $$
