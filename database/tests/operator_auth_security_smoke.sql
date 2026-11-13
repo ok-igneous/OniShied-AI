@@ -75,7 +75,8 @@ BEGIN
      OR has_table_privilege(current_user,'onishield.operator_memberships','SELECT')
      OR has_table_privilege(current_user,'onishield.operator_mfa_credentials','SELECT')
      OR has_table_privilege(current_user,'onishield.operator_login_challenges','SELECT')
-     OR has_table_privilege(current_user,'onishield.operator_mfa_audit','SELECT') THEN
+     OR has_table_privilege(current_user,'onishield.operator_mfa_audit','SELECT')
+     OR has_table_privilege(current_user,'onishield.operator_mfa_recovery_codes','SELECT') THEN
     RAISE EXCEPTION 'Auth service role unexpectedly has direct identity-table access';
   END IF;
 
@@ -117,6 +118,10 @@ BEGIN
     SELECT 1 FROM onishield.get_operator_mfa('10000000-0000-4000-8000-000000000002'::UUID)
     WHERE enabled
   ) THEN RAISE EXCEPTION 'MFA disablement did not clear active credentials'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM onishield.operator_mfa_recovery_codes
+    WHERE operator_id='10000000-0000-4000-8000-000000000002'::UUID
+  ) THEN RAISE EXCEPTION 'MFA disablement did not revoke unused recovery codes'; END IF;
 
   BEGIN
     PERFORM * FROM onishield.review_threat_indicator(
