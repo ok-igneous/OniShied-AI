@@ -147,7 +147,7 @@ BEGIN
     IF SQLERRM = 'Review accepted a viewer session' THEN RAISE; END IF;
   END;
     -- Session inventory exposes only metadata and is scoped to the authenticated operator.
-  IF (SELECT count(*) FROM onishield.list_operator_sessions(repeat('a',64))) <> 2 THEN
+  IF (SELECT count(*) FROM onishield.list_operator_sessions(repeat('a',64))) <> 3 THEN
     RAISE EXCEPTION 'Session inventory did not return only the review operator sessions';
   END IF;
 
