@@ -96,6 +96,12 @@ GRANT EXECUTE ON FUNCTION onishield.reset_operator_login_limit(TEXT) TO onishiel
 ALTER TABLE onishield.threat_indicator_status_audit
   ADD COLUMN actor_operator_id UUID REFERENCES onishield.operators(id);
 
+-- Disable the legacy shared database reviewer path. Human reviews must pass
+-- through the session-verifying function below; a custom GUC is not identity.
+DROP POLICY IF EXISTS threat_indicators_reviewer_update ON onishield.threat_indicators;
+REVOKE SELECT, UPDATE ON onishield.threat_indicators FROM onishield_reviewer;
+REVOKE SELECT ON onishield.threat_indicator_status_audit FROM onishield_reviewer;
+
 CREATE POLICY threat_indicators_owner_review_update
   ON onishield.threat_indicators
   FOR UPDATE TO onishield_owner
