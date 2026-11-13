@@ -15,10 +15,12 @@ Hybrid deployment is the target: a cloud control plane for organization manageme
 5. **Threat intelligence service** — validates, versions, expires, and matches provenance-backed indicators as contextual signals; it never authorizes response. See [THREAT_INTELLIGENCE_CONTRACT.md](THREAT_INTELLIGENCE_CONTRACT.md).
 6. **Investigation orchestrator** — gathers bounded context and asks AI to summarize evidence, identify gaps, and propose next steps. See [INVESTIGATION_ENGINE_CONTRACT.md](INVESTIGATION_ENGINE_CONTRACT.md).
 7. **Policy and approval service** — checks actor, tenant, action, target, risk, approval, and policy version before any execution.
-8. **Response executor** — runs a narrow allowlisted set of actions with least privilege, idempotency, timeout, and rollback where possible.
-9. **Audit service** — records event references, model/prompt version where applicable, policy decision, approver, action, result, and timestamps.
-10. **Operator clients** — desktop-first operational console and mobile alert/approval experience.
-11. **Identity and tenant control plane** — organization membership, roles, device enrollment, policy, configuration, and subscription lifecycle.
+8. **Autopilot policy service** — evaluates tenant opt-in, autonomy mode, risk ceiling, action allowlist, target scope, approvals, rate limits, and emergency pause. AI cannot grant permissions. See [AUTOPILOT_CONTRACT.md](AUTOPILOT_CONTRACT.md).
+9. **Response executor** — runs a narrow allowlisted set of actions with least privilege, idempotency, timeout, verification, and rollback where possible.
+10. **Backup and recovery service** — coordinates encrypted snapshots, isolated backup copies, integrity verification, restore drills, and clean-room recovery. See [BACKUP_AND_RECOVERY.md](BACKUP_AND_RECOVERY.md).
+11. **Audit service** — records event references, model/prompt version where applicable, policy decision, approver, action, result, and timestamps.
+12. **Operator clients** — desktop-first operational console and mobile alert/approval experience, including Autopilot controls and recovery status.
+13. **Identity and tenant control plane** — organization membership, roles, device enrollment, policy, configuration, and subscription lifecycle.
 
 ## Trust boundaries
 
@@ -29,7 +31,7 @@ Hybrid deployment is the target: a cloud control plane for organization manageme
 - Operator identity to privileged response executor boundary.
 - Tenant boundary for every customer-owned record and action.
 
-AI output is advisory data. It must never bypass authorization or policy enforcement.
+AI output is advisory data. It must never bypass authorization or policy enforcement. Autopilot is opt-in and default-off; policy checks are deterministic and server-side. Backups must be isolated from production administrative credentials, and recovery must begin in a clean environment.
 
 ## Core workflow
 
@@ -59,7 +61,7 @@ Each stage must emit a correlation identifier. Failed stages must be visible and
 
 ## Reliability and operations
 
-Design for retries, idempotency, queue back-pressure, dead-letter handling, connector offline states, clock skew, partial failures, and safe recovery. Never interpret missing telemetry as proof that a system is safe.
+Design for retries, idempotency, queue back-pressure, dead-letter handling, connector offline states, clock skew, partial failures, and safe recovery. Never interpret missing telemetry as proof that a system is safe. A backup is not considered verified until a restore drill succeeds. Autopilot fails closed whenever policy, audit, target identity, or outcome verification is unavailable.
 
 ## Open architecture decisions
 
