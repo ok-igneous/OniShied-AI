@@ -9,16 +9,16 @@
 - Reviewer access remains tenant-scoped through the existing `app.tenant_id` RLS context. There is no cross-tenant or global review mode.
 - The reviewer role can update only the `status` column. It cannot rewrite indicator values, provenance, source, confidence, TLP, or validity fields.
 - A database trigger enforces the state machine and requires a transaction-local reason of 10–1000 characters. Allowed transitions are pending → active/rejected and active → revoked/expired.
-- Every transition writes an audit row in the same transaction. The actor is recorded from PostgreSQL `session_user`, not accepted from a caller-supplied actor field.
+- Every transition writes an audit row in the same transaction. The database verifies the opaque operator session, derives the tenant/operator/role from persisted membership, and records `actor_operator_id`; it never accepts a caller-supplied actor ID. `actor_db_role` records the database service principal as secondary context.
 - The audit table is append-only for app and reviewer roles. Its trigger insert runs through a tightly scoped SECURITY DEFINER function with a fixed search_path; table RLS still checks the transaction tenant.
 - Reviewer credentials and membership must be provisioned out-of-band and kept out of source control. Do not expose reviewer database credentials to AI tools or ordinary application endpoints.
 
 ## Review transaction
 
-A trusted operations service must connect using an individually attributable reviewer database principal, set the tenant context, set `app.threat_review_reason`, and issue a status-only update. The current lab migration grants the reviewer role to the migrator login for testability; this is not an acceptable production identity model. Production must use per-reviewer database identities or a separately authenticated review service that establishes a non-spoofable actor identity.
+The local API accepts a bearer session and review request. The service hashes the token; the `SECURITY DEFINER` review function independently verifies that session, resolves the tenant and operator, checks the persisted role, sets transaction-local trusted context, performs the status-only update, and records the operator UUID in the same transaction. A caller cannot choose the actor or tenant. The legacy `onishield_reviewer` database role remains for migration-era smoke tests, but the authenticated review path does not depend on a shared reviewer login. This endpoint remains loopback-only until remote authentication and transport controls are reviewed.
 
 ## Validation
 
-The new PostgreSQL smoke test checks runtime denial, reviewer approval, audit creation, immutable evidence fields, illegal transition rejection, audit deletion denial, and cross-tenant isolation. These tests are committed but have not run because GitHub Actions currently fails before allocating a runner due to the account billing lock. Do not treat this as a verified security control until the migration and tests execute successfully.
+The PostgreSQL smoke tests check runtime denial, reviewer approval, audit creation, immutable evidence fields, illegal transition rejection, audit deletion denial, cross-tenant isolation, persistent login throttling, and operator-ID audit attribution. These tests are committed but have not run because GitHub Actions currently fails before allocating a runner due to the account billing lock. Do not treat this as a verified security control until the migration and tests execute successfully.
 
 No public review endpoint, AI approval, bulk activation, automatic feed ingestion, global intelligence, or response action is implemented.
