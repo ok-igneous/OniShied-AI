@@ -49,6 +49,13 @@ Protect customer systems, tenant data, operator identities, connector credential
 - Detect missing evidence and state uncertainty.
 - Never allow model confidence alone to authorize a response.
 
+### Configurable Autopilot safety
+- Autopilot is tenant opt-in and disabled by default; provide explicit mode, risk ceiling, per-action allowlist, target scope, and emergency pause.
+- Enforce configuration in a deterministic server-side policy service before every execution; never trust UI state or model output.
+- Tier 2 actions always require human approval; Tier 3 actions are excluded from the initial product and cannot be enabled by tenant configuration.
+- Reject stale policy, ambiguous targets, missing evidence, unavailable audit, and uncertain execution outcomes.
+- Apply rate, concurrency, time-window, and blast-radius limits; use idempotency and bounded retries.
+
 ### Response safety
 - Maintain an explicit allowlist of action types and targets.
 - Use dry-run mode by default.
@@ -57,6 +64,15 @@ Protect customer systems, tenant data, operator identities, connector credential
 - Make actions idempotent where possible; define timeout and rollback behavior.
 - Verify outcomes and log failures.
 - Provide emergency pause and credential revocation.
+
+### Backup and recovery safety
+- Keep at least one encrypted recovery copy outside the production administrative boundary; replication alone is not a backup.
+- Separate backup credentials from application and ordinary operator credentials; use immutable/versioned retention where available.
+- Keep encryption keys separate from backup data and test key recovery/rotation.
+- Restore into an isolated clean environment before returning to service; rotate potentially compromised credentials and re-enroll connectors.
+- Verify tenant isolation, audit continuity, schema integrity, and recovery-point provenance after restore.
+- Define and measure RPO/RTO; never promise zero data loss or instant recovery without evidence.
+- Run recurring restore drills; provider upload success alone is not a verified backup.
 
 ### Audit integrity
 Record who or what initiated an action, tenant, target, evidence references, policy version, approval identity, execution identity, timestamps, result, and errors. Protect audit records from ordinary operator modification.
