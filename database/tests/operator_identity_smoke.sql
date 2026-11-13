@@ -57,6 +57,7 @@ DO $
 DECLARE
   credential_count INTEGER;
   session_count INTEGER;
+  v_membership_id BIGINT;
   digest TEXT := repeat('a', 64);
 BEGIN
   SELECT count(*) INTO credential_count
@@ -71,10 +72,13 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+  SELECT membership_id INTO v_membership_id
+    FROM onishield.lookup_operator_membership(
+      '00000000-0000-4000-8000-000000000001', 'identity-tenant-a'
+    );
   PERFORM * FROM onishield.create_operator_session(
     digest, 'identity-tenant-a', '00000000-0000-4000-8000-000000000001',
-    (SELECT id FROM onishield.operator_memberships WHERE tenant_id='identity-tenant-a'),
-    NOW() + INTERVAL '1 hour'
+    v_membership_id, NOW() + INTERVAL '1 hour'
   );
   SELECT count(*) INTO session_count FROM onishield.resolve_operator_session(digest);
   IF session_count <> 1 THEN RAISE EXCEPTION 'Session did not resolve'; END IF;
