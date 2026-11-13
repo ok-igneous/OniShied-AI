@@ -15,14 +15,14 @@
 
 ## Implemented service boundary
 
-- Credential and membership lookup use narrowly granted SECURITY DEFINER functions available only to the dedicated `onishield_auth` role. Do not reuse the normal application database connection.
+- Credential and membership lookup use narrowly granted SECURITY DEFINER functions available only to the dedicated `onishield_auth` role. The application exports a separate auth pool when `AUTH_DATABASE_URL` is configured; it never falls back to the general runtime connection. Do not reuse the normal application database connection.
 - Session creation verifies active operator and membership state and caps lifetime at eight hours.
 - Session resolution rejects revoked/expired sessions and inactive accounts/memberships.
 - Session revocation accepts only a validated opaque token and stores/uses its digest.
 - Unknown-account login attempts perform dummy scrypt work to reduce account-enumeration timing differences.
 - Permission checks use a server-defined role/action map and deny unknown roles/actions.
 
-Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_app. They require dedicated PostgreSQL security review before production.
+Database functions use a fixed search path, are not executable by PUBLIC, and are granted only to onishield_auth. The general onishield_app role has no execute grants on these functions. They require dedicated PostgreSQL security review before production.
 
 ## Deliberately not exposed
 
