@@ -64,6 +64,10 @@ function normalizeDomain(input: string): string {
     throw new IndicatorValidationError("Domain cannot be converted to IDNA ASCII");
   }
 
+  if (isIP(ascii) !== 0) {
+    throw new IndicatorValidationError("An IP address is not a domain indicator");
+  }
+
   const labels = ascii.split(".");
   if (labels.some((label) =>
     label.length > 63 || !DOMAIN_LABEL_PATTERN.test(label)
