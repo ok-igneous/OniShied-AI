@@ -178,7 +178,8 @@ BEGIN
      AND m.status = 'active'
    LIMIT 1;
 
-  IF NOT FOUND OR trusted_session.role NOT IN ('owner','admin','reviewer') THEN
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized threat indicator review'; END IF;
+  IF trusted_session.role NOT IN ('owner','admin','reviewer') THEN
     RAISE EXCEPTION 'Unauthorized threat indicator review';
   END IF;
 
