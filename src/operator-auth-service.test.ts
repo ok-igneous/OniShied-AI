@@ -105,3 +105,16 @@ test("logout sends only the SHA-256 digest to PostgreSQL", async () => {
   assert.equal(calls[0]?.params[0], hashOperatorSessionToken(token));
   assert.notEqual(calls[0]?.params[0], token);
 });
+
+test("authorization derives role from the resolved session and denies forbidden actions", async () => {
+  const { database } = fakeDatabase((sql) => sql.includes("resolve_operator_session")
+    ? { rows: [principalRow] }
+    : { rows: [] });
+  const service = new OperatorAuthService(database);
+  const principal = await service.authorize("A".repeat(43), "investigation:read");
+  assert.equal(principal.operatorId, accountId);
+  await assert.rejects(
+    () => service.authorize("A".repeat(43), "response:approve"),
+    /forbidden/
+  );
+});
