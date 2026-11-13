@@ -274,3 +274,26 @@ test("MFA login issues a challenge instead of a session, then consumes a valid T
   assert.equal(session.principal.operatorId,accountId);
   assert.ok(calls.some((call)=>call.sql.includes("consume_operator_login_challenge")));
 });
+
+test("enrolled reviewer step-up requires a fresh TOTP counter", async () => {
+  const token = "A".repeat(43);
+  const passwordHash = await hashOperatorPassword("correct horse battery staple");
+  const secret = generateTotpSecret();
+  const encrypted = encryptMfaSecret(secret,"ab".repeat(32));
+  const {database,calls} = fakeDatabase((sql) => {
+    if (sql.includes("resolve_operator_session")) return {rows:[{...principalRow,role:"reviewer"}]};
+    if (sql.includes("lookup_operator_credentials")) return {rows:[{password_hash:passwordHash,operator_status:"active"}]};
+    if (sql.includes("get_operator_mfa")) return {rows:[{enabled:true,ciphertext:encrypted.ciphertext,nonce:encrypted.nonce,auth_tag:encrypted.authTag}]};
+    if (sql.includes("mark_operator_session_step_up")) return {rows:[{marked:true}]};
+    return {rows:[]};
+  });
+  const service = new OperatorAuthService(database,"test-only-rate-limit-secret-with-32-plus-characters","ab".repeat(32));
+  await assert.rejects(()=>service.stepUp(token,"correct horse battery staple"),/MFA code required/);
+  assert.equal(calls.some(call=>call.sql.includes("mark_operator_session_step_up")),false);
+  const code = generateTotpAt(secret,Date.now());
+  const result = await service.stepUp(token,"correct horse battery staple",code);
+  assert.equal(result.validForSeconds,300);
+  const mark = calls.filter(call=>call.sql.includes("mark_operator_session_step_up")).at(-1);
+  assert.equal(mark?.params[0],hashOperatorSessionToken(token));
+  assert.equal(typeof mark?.params[1],"number");
+});
