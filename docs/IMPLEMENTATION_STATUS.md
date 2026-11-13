@@ -15,7 +15,8 @@
 - Tenant-scoped threat-intelligence tables, match persistence, and database uniqueness for idempotent match records.
 - Reviewer-only threat-indicator status transitions, a required review reason, and trigger-generated status audit records.
 - PostgreSQL smoke tests for event RLS, threat-intelligence RLS, reviewer authorization/audit controls, and operator identity permissions.
-- Operator identity and tenant-membership schema; scrypt password verification, opaque session tokens, dedicated auth database role/pool, narrow SECURITY DEFINER credential/session functions, tenant-bound session validation/revocation, and deny-by-default role/action authorization map.
+- Operator identity and tenant-membership schema; scrypt password verification, opaque session tokens, dedicated auth database role/pool, narrow SECURITY DEFINER credential/session functions, tenant-bound session validation/revocation, and deny-by-default role/action authorization bound to a validated session.
+- Operator-auth service unit tests for successful login, wrong password, inactive account, missing tenant membership, token digest handling, logout, and authorization.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
 - CI workflow configured to provision PostgreSQL, apply migrations, execute database smoke tests, run unit tests, type-check, and build.
 
