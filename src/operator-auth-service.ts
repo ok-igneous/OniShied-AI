@@ -34,7 +34,10 @@ export class OperatorAuthService {
     await this.database.query("SELECT * FROM onishield.create_operator_session($1,$2,$3,$4,$5)",
       [tokenHash, tenantId, account.operator_id, activeMembership.membership_id, expiresAt]);
     const principal = await this.resolve(token);
-    if (!principal) throw new Error("Session creation failed");
+    if (!principal) {
+      await this.logout(token);
+      throw new Error("Session creation failed");
+    }
     return { token, expiresAt: expiresAt.toISOString(), principal };
   }
 
