@@ -10,7 +10,7 @@ export type OperatorAction =
   | "threat-intelligence:review"
   | "response:approve";
 
-const ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> = {
+const ALL_ACTIONS = new Set<OperatorAction>(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review", "response:approve"]);\n\nconst ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> = {
   owner: new Set(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review", "response:approve"]),
   admin: new Set(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review"]),
   security_analyst: new Set(["event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read"]),
@@ -19,7 +19,7 @@ const ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> 
 };
 
 export function canOperatorPerform(role: string, action: string): boolean {
-  if (!Object.hasOwn(ROLE_ACTIONS, role) || !Object.hasOwn(ROLE_ACTIONS.owner, action)) return false;
+  if (!Object.hasOwn(ROLE_ACTIONS, role) || !ALL_ACTIONS.has(action as OperatorAction)) return false;
   return ROLE_ACTIONS[role as OperatorRole].has(action as OperatorAction);
 }
 
