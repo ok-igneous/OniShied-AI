@@ -6,7 +6,7 @@ Last updated: 2026-11-13
 
 - Product vision, architecture, security, team, roadmap, and ADR documentation.
 - Initial deterministic detection scenario catalogue (design only; no rule engine implemented).
-- Threat intelligence contract and tenant-scoped PostgreSQL schema migration 003 (service, normalization, matching, reviewer workflow, and tests not implemented).
+- Threat intelligence contract, tenant-scoped PostgreSQL schema migration 003, and CI RLS smoke-test definition (not executed yet); service, normalization, matching, reviewer workflow, and behavior tests remain unimplemented.
 - AI investigation engine contract (design only; no model provider, orchestration, or investigation API implemented).
 - Controlled competition demonstration runbook with explicit capability-claim boundaries.
 - Mandatory modular-code standard: hard maximum 500 lines per source file.
@@ -30,7 +30,7 @@ Last updated: 2026-11-13
 - The manually triggered CI run failed before any workflow steps executed because GitHub reported the account is locked due to a billing issue. Passing CI has not been established.
 - The repository is currently public by owner decision. Branch protection has not been verified in the current public-repository state; do not assume it is active.
 - The application has not yet been installed, compiled, or run against PostgreSQL in a local Linux environment during this work session.
-- SQL migrations 001–003 and the RLS smoke test have not yet been executed in a live PostgreSQL instance.
+- SQL migrations 001–003 and both tenant RLS smoke tests have not yet been executed in a live PostgreSQL instance.
 - Threat intelligence normalization, matching, TLP enforcement, reviewer authorization, and audit behavior do not exist yet.
 - A committed npm lockfile is still missing. The current execution environment could not reach the npm registry to generate one.
 - Dependabot, secret scanning, and CodeQL status have not yet been verified in GitHub settings.
