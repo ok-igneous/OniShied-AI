@@ -95,7 +95,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM onishield.get_pending_operator_mfa(repeat('d',64))) THEN
     RAISE EXCEPTION 'Pending MFA secret was not retrievable for confirmation';
   END IF;
-  IF NOT onishield.activate_operator_mfa(repeat('d',64),55) THEN
+  IF NOT onishield.activate_operator_mfa(repeat('d',64),55,ARRAY[repeat('1',64),repeat('2',64),repeat('3',64),repeat('4',64),repeat('5',64),repeat('6',64),repeat('7',64),repeat('8',64),repeat('9',64),repeat('a',64)]) THEN
     RAISE EXCEPTION 'MFA enrollment confirmation failed';
   END IF;
   IF NOT EXISTS (
