@@ -65,7 +65,7 @@ The example is a contract illustration only; no seeded production operator or pa
 - Before remote/browser/mobile deployment, implement TLS termination, strict origin/CORS policy, secure platform token storage, deployment-specific abuse controls, and operational monitoring. The present API is intentionally loopback-only.
 - Account invitation, email verification, password recovery, session device labels, and step-up for actions other than threat-indicator review remain unimplemented. TOTP and one-use recovery codes are implemented for enrolled accounts. Recovery codes are shown only once at enrollment, are stored as peppered HMAC digests, and are consumed atomically on login or password-verified step-up. Session inventory, rotation, revocation, and password reauthentication for threat-indicator review are implemented; device fingerprinting is deliberately not inferred from untrusted user-agent strings.
 - Rate-limit buckets are HMAC-keyed before persistence; raw email addresses and IP addresses are not stored in the throttle table. `database/maintenance/cleanup_operator_login_limits.sql` deletes expired MFA login challenges older than one day and throttle buckets untouched for 30 days; schedule it daily with the deployment's trusted database maintenance runner.
-- Back up `MFA_ENCRYPTION_KEY` in a dedicated secret manager. Losing it makes existing encrypted TOTP secrets unusable; key rotation with re-encryption is a production release gate.
+- Back up `MFA_ENCRYPTION_KEY` and `MFA_RECOVERY_PEPPER` in a dedicated secret manager. Losing the encryption key makes existing TOTP secrets unusable; losing the recovery pepper invalidates all outstanding recovery codes. Key rotation with re-encryption/re-hashing is a production release gate. Recovery codes are 128-bit random values and are stored only as peppered HMAC digests.
 - The existing lab connector endpoint remains separate and does not authenticate human operators.
 
 ## Authorization rules
@@ -79,8 +79,8 @@ The example is a contract illustration only; no seeded production operator or pa
 
 ## Release gates
 
-1. Verify migrations 006–010, MFA enrollment/login/step-up/disable flows, TOTP replay prevention, challenge expiry and one-use behavior, MFA audit records, five-minute review step-up expiry, session lifecycle, and all PostgreSQL/RLS smoke tests in a successful CI run.
-2. Add one-time recovery codes with salted/peppered hashes, atomic consumption, rate limits, audit events, and a separately authorized account recovery process. Define encryption-key rotation and backup/restore procedures before production.
+1. Verify migrations 006–011, MFA enrollment/login/step-up/disable flows, TOTP replay prevention, recovery-code one-use consumption, challenge expiry and one-use behavior, MFA audit records, five-minute review step-up expiry, session lifecycle, and all PostgreSQL/RLS smoke tests in a successful CI run.
+2. Implement account invitation, email verification, password recovery, and a separately authorized account recovery process. Define encryption-key rotation and backup/restore procedures before production.
 3. Design and security-review remote browser/mobile token transport, TLS, origin policy, secure storage, and step-up authentication.
 4. Replace shared lab reviewer DB identity with individually attributable reviewer accounts in the production operations model.
 5. Schedule the 30-day throttle-bucket cleanup, add monitoring, and document abuse-response procedures.
