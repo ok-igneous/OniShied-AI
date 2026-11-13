@@ -29,6 +29,7 @@ export interface ThreatIndicator {
 }
 
 export interface IndicatorMatch {
+  event_id: string;
   indicator_id: string;
   indicator_version: number;
   indicator_type: IndicatorType;
@@ -120,6 +121,8 @@ function normalizeEmail(input: string): string {
   const local = input.slice(0, separator);
   if (
     local.length > 64 ||
+    local.includes('@') ||
+    !/^[\\x21-\\x7E]+$/.test(local) ||
     /[\s\u0000-\u001f\u007f]/.test(local) ||
     local.startsWith(".") ||
     local.endsWith(".") ||
@@ -205,6 +208,9 @@ export function matchThreatIndicators(input: {
   matcherVersion?: string;
 }): IndicatorMatch[] {
   const now = input.now ?? new Date();
+  if (!input.eventId || input.eventId.length > 128) {
+    throw new IndicatorValidationError('A valid event ID is required');
+  }
   if (Number.isNaN(now.getTime())) {
     throw new IndicatorValidationError("Invalid matching timestamp");
   }
@@ -256,6 +262,7 @@ export function matchThreatIndicators(input: {
       ].join(":");
 
       matches.set(dedupeKey, {
+        event_id: input.eventId,
         indicator_id: indicator.id,
         indicator_version: indicator.version,
         indicator_type: indicator.type,
