@@ -87,7 +87,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, onishield
 AS $$
 DECLARE current_session RECORD;
-  changed BOOLEAN := FALSE;
+  changed_count INTEGER := 0;
 BEGIN
   SELECT s.id, s.tenant_id, s.operator_id
     INTO current_session
@@ -107,8 +107,8 @@ BEGIN
      AND operator_id = current_session.operator_id
      AND id <> current_session.id
      AND revoked_at IS NULL;
-  GET DIAGNOSTICS changed = ROW_COUNT;
-  RETURN changed;
+  GET DIAGNOSTICS changed_count = ROW_COUNT;
+  RETURN changed_count > 0;
 END;
 $$;
 
