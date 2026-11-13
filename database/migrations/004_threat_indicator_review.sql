@@ -1,9 +1,6 @@
 -- Reviewer-only threat indicator transitions with database-enforced audit.
 -- The reviewer role is not granted to the runtime application role.
 
-CREATE ROLE onishield_reviewer NOLOGIN;
-GRANT onishield_reviewer TO onishield_migrator;
-
 CREATE TABLE onishield.threat_indicator_status_audit (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   tenant_id TEXT NOT NULL,
