@@ -52,6 +52,7 @@ A successful demo is a reproducible end-to-end workflow, not a dashboard mock-up
 - `docs/SECURITY_MODEL.md` — threat model, safety controls, and security requirements.
 - `docs/THREAT_INTELLIGENCE_CONTRACT.md` — threat intelligence schema, normalization, matching, and service boundaries.
 - `docs/THREAT_INTELLIGENCE_REVIEW.md` — reviewer authorization, status transitions, and append-only audit controls.
+- `docs/OPERATOR_IDENTITY.md` — operator identity schema, credential primitives, and authentication release gates.
 - `docs/DEVELOPMENT_ROADMAP.md` — staged implementation plan.
 - `docs/TEAM_ROLES.md` — founding team responsibilities and working agreements.
 - `CONTRIBUTING.md` — development workflow and contribution rules.
