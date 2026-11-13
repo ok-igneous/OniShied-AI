@@ -41,7 +41,7 @@ Only these explicit event data fields are examined: `source_ip`, `destination_ip
 
 Only indicators with status `active`, a valid `valid_from`, and no elapsed `expires_at` can match. Pending, expired, revoked, and rejected indicators are ignored. Candidate processing is capped at 10,000 records per event; exceeding the cap fails closed rather than silently returning partial results.
 
-The database service is an internal callable function, not an HTTP endpoint, and is not wired into event ingestion or an autonomous response path. It returns TLP metadata with each match; TLP-aware authorization for user-facing reads and exports is still required before exposing matches outside the internal service.
+The database service is an internal callable function, not an HTTP endpoint, and is not wired into event ingestion or an autonomous response path. It returns TLP metadata with each match. `src/threat-intelligence-access.ts` now provides a fail-closed disclosure-policy evaluator for TLP:CLEAR, GREEN, AMBER, and RED, with tests for tenant boundaries and recipient scope. This is a policy primitive only: it does not authenticate callers, and no read/report/export endpoint is wired to it. Do not expose matches until authenticated identity, tenant authorization, recipient/community/organization membership, and persisted handling metadata are connected and tested.
 
 ## Indicator record
 
@@ -83,7 +83,7 @@ Still required:
 2. Verify same-tenant matching and cross-tenant denial with live PostgreSQL.
 3. Test database match idempotency on replay.
 4. Implement reviewer authorization and append-only status audit before activation/revocation.
-5. Implement and test TLP read/export enforcement before exposing matches.
+5. Connect the TLP evaluator to authenticated read/report/export paths only after recipient scope and membership are backed by trusted server-side identity and persisted data; test every path.
 6. Add property/fuzz tests for URL, IDNA, IP, and email edge cases.
 7. Ensure indicator matches cannot trigger response actions.
 
