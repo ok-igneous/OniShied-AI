@@ -147,6 +147,33 @@ app.delete<{ Params: { sessionId: string } }>(
   }
 );
 
+app.post("/v1/operator/step-up", async (request, reply) => {
+  if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+  const token = operatorBearer(request.headers.authorization);
+  const parsed = z.object({password:z.string().min(1).max(256)}).strict().safeParse(request.body);
+  if (!token) return reply.code(401).send({ error: "unauthorized" });
+  if (!parsed.success) return reply.code(400).send({ error: "invalid_step_up_request" });
+  try {
+    const result = await operatorAuth.stepUp(token, parsed.data.password);
+    reply.header("cache-control", "no-store");
+    reply.header("pragma", "no-cache");
+    return { stepUp: result };
+  } catch (error) {
+    if (error instanceof OperatorLoginRateLimitError) {
+      reply.header("retry-after", String(error.retryAfterSeconds));
+      return reply.code(429).send({ error: "too_many_step_up_attempts" });
+    }
+    if (error instanceof Error && error.message === "unauthorized") {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    if (error instanceof Error && error.message === "Invalid step-up credentials") {
+      return reply.code(401).send({ error: "invalid_step_up_credentials" });
+    }
+    request.log.error({ err: error }, "Operator step-up unavailable");
+    return reply.code(503).send({ error: "operator_auth_unavailable" });
+  }
+});
+
 app.post<{ Params: { indicatorId: string } }>(
   "/v1/threat-intelligence/:indicatorId/review",
   async (request, reply) => {
@@ -170,6 +197,9 @@ app.post<{ Params: { indicatorId: string } }>(
       }
       if (error instanceof Error && error.message === "forbidden") {
         return reply.code(403).send({ error: "forbidden" });
+      }
+      if (error instanceof Error && /Step-up authentication required/.test(error.message)) {
+        return reply.code(428).send({ error: "step_up_required" });
       }
       if (error instanceof Error && /Invalid review request/.test(error.message)) {
         return reply.code(400).send({ error: "invalid_review_request" });
