@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { assertOperatorPermission, type OperatorAction } from "./operator-authz.js";
 import { authPool } from "./database.js";
@@ -29,9 +30,9 @@ function normalizeEmail(email: string): string {
 export class OperatorAuthService {
   constructor(private readonly database: Pick<Pool, "query">) {}
 
-  private async consumeLoginLimit(key: string): Promise<number> {
+  private async consumeLoginLimit(key: string, maxAttempts: number): Promise<number> {
     const result = await this.database.query<{allowed:boolean;retry_after_seconds:number}>(
-      "SELECT * FROM onishield.consume_operator_login_limit($1,5,900,900)", [key]);
+      "SELECT * FROM onishield.consume_operator_login_limit($1,$2,900,900)", [key, maxAttempts]);
     const row = result.rows[0];
     if (!row?.allowed) return Math.max(1, Number(row?.retry_after_seconds ?? 900));
     return 0;
@@ -41,12 +42,12 @@ export class OperatorAuthService {
     if (password.length < 1 || password.length > 256 || tenantId.trim().length < 1 || tenantId.length > 128) throw new Error("Invalid login credentials");
     const normalizedEmail = normalizeEmail(email);
     const normalizedTenantId = tenantId.trim();
-    if (!clientIp || clientIp.length > 128) throw new Error("Invalid login credentials");
+    if (!clientIp || clientIp.length > 128 || isIP(clientIp) === 0) throw new Error("Invalid login credentials");
     const emailKey = throttleKey("email", normalizedEmail);
     const ipKey = throttleKey("ip", clientIp);
     const limits = await Promise.all([
-      this.consumeLoginLimit(emailKey),
-      this.consumeLoginLimit(ipKey)
+      this.consumeLoginLimit(emailKey, 5),
+      this.consumeLoginLimit(ipKey, 30)
     ]);
     const retryAfter = Math.max(...limits);
     if (retryAfter > 0) throw new OperatorLoginRateLimitError(retryAfter);
