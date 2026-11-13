@@ -20,7 +20,7 @@
 - Session resolution rejects revoked/expired sessions and inactive accounts/memberships.
 - Session revocation accepts only a validated opaque token and stores/uses its digest.
 - Unknown-account login attempts perform dummy scrypt work to reduce account-enumeration timing differences.
-- Login attempts are rate-limited in PostgreSQL by hashed account and source-IP buckets: five attempts per 15-minute account window and 30 attempts per 15-minute source-IP window, each followed by a 15-minute lock. The account bucket resets after a successful login; the IP bucket ages out naturally.
+- Login attempts are rate-limited in PostgreSQL by HMAC-keyed account and source-IP buckets: five attempts per 15-minute account window and 30 attempts per 15-minute source-IP window, each followed by a 15-minute lock. The account bucket resets after a successful login; the IP bucket ages out naturally. `AUTH_RATE_LIMIT_SECRET` is mandatory whenever `AUTH_DATABASE_URL` is set, preventing offline email/IP guessing from a database-only leak.
 - `POST /v1/operator/login`, `GET /v1/operator/me`, and `POST /v1/operator/logout` are exposed only by the current loopback-bound Fastify process. Login responses are marked `Cache-Control: no-store` and use bearer tokens, not cookies.
 - `POST /v1/threat-intelligence/:indicatorId/review` requires a validated session and review permission. PostgreSQL revalidates the session and tenant, derives the operator ID from the stored session, performs the state transition, and writes that operator UUID into the append-only audit record.
 - Unit tests cover normalized login, wrong passwords, inactive accounts, absent tenant membership, session token hashing, logout, and session-bound authorization.
