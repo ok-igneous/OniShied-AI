@@ -64,7 +64,7 @@ app.post("/v1/operator/login/verify", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
   const parsed = z.object({
     challengeToken:z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-    code:z.string().regex(/^\d{6}$/)
+    code:z.string().regex(/^(?:\d{6}|[A-Fa-f0-9]{32})$/)
   }).strict().safeParse(request.body);
   if (!parsed.success) return reply.code(400).send({ error:"invalid_mfa_challenge" });
   try {
@@ -176,7 +176,7 @@ app.delete<{ Params: { sessionId: string } }>(
 app.post("/v1/operator/step-up", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
   const token = operatorBearer(request.headers.authorization);
-  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^\d{6}$/).optional()}).strict().safeParse(request.body);
+  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^(?:\d{6}|[A-Fa-f0-9]{32})$/).optional()}).strict().safeParse(request.body);
   if (!token) return reply.code(401).send({ error: "unauthorized" });
   if (!parsed.success) return reply.code(400).send({ error: "invalid_step_up_request" });
   try {
@@ -222,7 +222,7 @@ app.post("/v1/operator/mfa/enroll", async (request, reply) => {
 app.post("/v1/operator/mfa/confirm", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
   const token = operatorBearer(request.headers.authorization);
-  const parsed = z.object({code:z.string().regex(/^\d{6}$/)}).strict().safeParse(request.body);
+  const parsed = z.object({code:z.string().regex(/^(?:\d{6}|[A-Fa-f0-9]{32})$/)}).strict().safeParse(request.body);
   if (!token) return reply.code(401).send({error:"unauthorized"});
   if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_code"});
   try {
@@ -245,7 +245,7 @@ app.post("/v1/operator/mfa/confirm", async (request, reply) => {
 app.delete("/v1/operator/mfa", async (request, reply) => {
   if (!operatorAuth) return reply.code(503).send({error:"operator_auth_not_configured"});
   const token = operatorBearer(request.headers.authorization);
-  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^\d{6}$/)}).strict().safeParse(request.body);
+  const parsed = z.object({password:z.string().min(1).max(256),code:z.string().regex(/^(?:\d{6}|[A-Fa-f0-9]{32})$/)}).strict().safeParse(request.body);
   if (!token) return reply.code(401).send({error:"unauthorized"});
   if (!parsed.success) return reply.code(400).send({error:"invalid_mfa_disable_request"});
   try {
