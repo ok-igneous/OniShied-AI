@@ -41,16 +41,32 @@ Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [in
 
 **Exit gate:** AI produces bounded, evidence-linked investigation summaries without action privileges.
 
-## Phase 4 — Policy-gated response
-- [ ] Define action registry and risk tiers.
-- [ ] Implement dry-run and policy checks.
-- [ ] Add approval workflow for disruptive actions.
-- [ ] Implement one reversible lab-only action.
-- [ ] Verify outcomes and audit every decision.
+## Phase 4 — Policy-gated response and configurable Autopilot
 
-**Exit gate:** a full safe lab workflow from event to approved response and audit record.
+Normative contract: [Configurable Autopilot](AUTOPILOT_CONTRACT.md). This is a design contract, not an implemented feature.
+- [ ] Define action registry and deterministic risk tiers.
+- [ ] Implement tenant-scoped Autopilot policy (default OFF), modes, per-action allowlist, target scope, and policy versioning.
+- [ ] Implement dry-run simulator and policy decision audit.
+- [ ] Add human approval for Tier 2; prohibit Tier 3 in the initial product.
+- [ ] Implement emergency pause/kill switch, bounded retries, idempotency, and outcome verification.
+- [ ] Implement one reversible lab-only action adapter.
+- [ ] Test fail-closed behavior, stale policy, concurrency, and blast-radius limits.
 
-## Phase 5 — Operator experience
+**Exit gate:** a complete safe lab workflow where an authorized tenant can enable a bounded mode, inspect dry-run decisions, approve disruptive actions, pause automation, and audit verified outcomes.
+
+## Phase 5 — Backup and disaster recovery
+
+Normative contract: [Backup and Disaster Recovery](BACKUP_AND_RECOVERY.md). This is a design contract, not an implemented backup service.
+- [ ] Inventory recoverable data classes, exclusions, retention, and tenant restore boundaries.
+- [ ] Select backup/PITR provider and isolated backup account/destination.
+- [ ] Implement encrypted snapshots and WAL/PITR where supported.
+- [ ] Add immutable/versioned off-boundary copies and integrity manifests.
+- [ ] Build isolated restore procedure and tenant-isolation verification.
+- [ ] Run restore drills, key-loss exercises, and measure RPO/RTO.
+
+**Exit gate:** a documented, repeatable restore into a clean environment with measured recovery objectives and verified tenant/audit integrity.
+
+## Phase 6 — Operator experience
 - [ ] Build desktop operational view.
 - [ ] Add alert details, evidence, approvals, and audit history.
 - [ ] Add mobile alert review and approval experience.
@@ -58,7 +74,7 @@ Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [in
 
 **Exit gate:** a reviewer can operate and understand the demonstrator without developer intervention.
 
-## Phase 6 — Hardening and competition readiness
+## Phase 7 — Hardening and competition readiness
 
 Demonstration planning: [controlled demonstration runbook](DEMO_RUNBOOK.md). This is a planned sequence; only verified capabilities may be presented as working.
 - [ ] Threat-model review and security test report.
