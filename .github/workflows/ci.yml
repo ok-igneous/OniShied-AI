@@ -103,8 +103,11 @@ jobs:
       - name: Run schema tests
         run: npm test
 
-      - name: Test backup encryption and manifest authentication
-        run: npm run test:backup
+      - name: Test backup encryption, connection mapping, and uploader syntax
+        run: |
+          npm run test:backup
+          node --check scripts/backup-postgres.mjs
+          node --check scripts/backup-s3.mjs
 
       - name: Type-check
         run: npm run typecheck
