@@ -37,9 +37,11 @@
 
 - A responsive operator workspace is served at `/operator`.
 - Operators paste an existing operator session token; the console does not collect passwords or issue sessions. The token is held in browser session storage for the tab and can be cleared with Disconnect.
-- The console lists cases, opens case evidence and activity, requests AI analysis, checks queue status, loads immutable report history, and adds analyst notes.
+- The console lists cases, creates cases from 1–25 explicitly supplied finding IDs and a human reason, opens case evidence and activity, associates additional findings, and adds analyst notes.
+- Authorized analysts can request finding-status transitions with a reason. The database enforces role permissions and recent step-up authentication; the UI reports a step-up-required response rather than bypassing that control.
+- The console requests AI analysis, checks queue status, and loads immutable report history.
 - API calls use same-origin authenticated endpoints and no-store caching. The page sets a restrictive Content Security Policy and does not load third-party scripts, fonts, images, or analytics.
-- The console is an operational first slice, not a complete SOC dashboard. It does not create cases from arbitrary findings or manage finding lifecycle transitions yet.
+- The console is an operational first slice, not a complete SOC dashboard. It still lacks an in-console password/MFA login flow, finding discovery/search view, case assignment and status workflow, and alert delivery.
 
 ## Deliberate limitations
 
