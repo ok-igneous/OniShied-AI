@@ -74,7 +74,10 @@ export function detectAuthenticationAnomalies(events: AuthEvent[]): Detection[] 
       const window = failures.filter((event) =>
         event.time <= current.time && event.time >= current.time - BURST_WINDOW_MS
       );
-      if (window.length === BURST_THRESHOLD) {
+      const previousWindowCount = failures.filter((event) =>
+        event.time < current.time && event.time >= current.time - BURST_WINDOW_MS
+      ).length;
+      if (window.length >= BURST_THRESHOLD && previousWindowCount < BURST_THRESHOLD) {
         const ids = window.map((event) => event.event_id).sort();
         const tenant = current.tenant_id;
         const fp = fingerprint(["AUTH_FAILURE_BURST", tenant, current.subject, current.ip, ...ids]);
