@@ -94,7 +94,7 @@ async function createBackup() {
   const iv = randomBytes(12);
   const cipher = createBackupCipher(keys.encryptionKey, iv);
   const output = createWriteStream(temporaryPath, { mode: 0o600, flags: "wx" });
-  const child = spawn("pg_dump", ["--format=custom", "--no-owner", "--no-acl"], {
+  const child = spawn("pg_dump", ["--no-password", "--format=custom", "--no-owner", "--no-acl"], {
     env: { ...process.env, PGDATABASE: databaseUrl },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -154,7 +154,7 @@ function commandOutput(command, args) {
 
 async function validateArchive(artifactPath, info, iv, tag, encryptionKey) {
   const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, encryptionKey);
-  const child = spawn("pg_restore", ["--list"], { stdio: ["pipe", "ignore", "pipe"] });
+  const child = spawn("pg_restore", ["--no-password", "--list"], { stdio: ["pipe", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
@@ -206,7 +206,7 @@ async function restoreBackup() {
   if (Number(objectCount) !== 0) throw new Error("Restore target is not empty; no objects were changed");
   const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
   const child = spawn("pg_restore", [
-    "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
+    "--no-password", "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
   ], { env: { ...process.env, PGDATABASE: targetUrl }, stdio: ["pipe", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf8");
@@ -223,7 +223,7 @@ async function restoreBackup() {
 
 async function queryScalar(url, sql) {
   return new Promise((resolve, reject) => {
-    const child = spawn("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-Atqc", sql], {
+    const child = spawn("psql", ["-X", "-w", "-v", "ON_ERROR_STOP=1", "-Atqc", sql], {
       env: { ...process.env, PGDATABASE: url }, stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "", stderr = "";
