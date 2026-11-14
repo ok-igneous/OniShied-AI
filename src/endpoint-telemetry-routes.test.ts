@@ -77,3 +77,15 @@ test("endpoint route fails closed when the ingestion database is unavailable",as
   assert.equal(response.json().error,"endpoint_telemetry_unavailable");
   await app.close();
 });
+
+test("endpoint route exposes a retryable rate-limit response",async()=>{
+  const app=await makeApp(async()=>{throw new Error("Endpoint telemetry rate limit exceeded");});
+  const response=await app.inject({
+    method:"POST",url:"/v1/endpoints/telemetry",
+    headers:{authorization:`Bearer ${token}`},payload:{events:[heartbeat]}
+  });
+  assert.equal(response.statusCode,429);
+  assert.equal(response.headers["retry-after"],"60");
+  assert.equal(response.json().error,"endpoint_telemetry_rate_limited");
+  await app.close();
+});
