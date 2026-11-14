@@ -9,7 +9,7 @@
 - Node.js 22 or later.
 - PostgreSQL client utilities compatible with the source server: `pg_dump`, `pg_restore`, and `psql`.
 - A dedicated backup operator identity with read-only access sufficient for `pg_dump`. Do not use the application runtime role or a superuser for routine backups.
-- A 32-byte random encryption key held in a secrets manager or another recovery-controlled location, separate from the backup destination.
+- A versioned set of 32-byte random encryption keys held in a secrets manager or another recovery-controlled location, separate from the backup destination. Keep every historical key needed by retained backups.
 - A protected destination directory with restricted filesystem permissions. This lab writes encrypted files locally; it does not provide off-site isolation.
 
 Generate a key once using a trusted secrets-management process (example only):
@@ -18,7 +18,7 @@ Generate a key once using a trusted secrets-management process (example only):
 openssl rand -hex 32
 ```
 
-Store the value in a secrets manager. Preserve the key and its key ID separately from backup files. Losing the key makes these backups unrecoverable; rotating it does not re-encrypt older backups.
+Store each value in a secrets manager. Preserve each key and its ID separately from backup files. Losing a historical key makes every backup encrypted under that key unrecoverable. The key ID in the authenticated manifest selects the exact key used for verification and restore.
 
 ## Create a backup
 
@@ -26,8 +26,8 @@ Set the source database URL and key material in the process environment, not in 
 
 ```sh
 export DATABASE_URL='postgresql://backup_user:REDACTED@127.0.0.1:5432/onishield_lab'
-export BACKUP_ENCRYPTION_KEY='64_HEX_CHARACTERS_FROM_SECRET_STORE'
-export BACKUP_ENCRYPTION_KEY_ID='onishield-lab-key-01'
+export BACKUP_KEYRING_JSON='{"onishield-lab-key-01":"64_HEX_CHARACTERS_FROM_SECRET_STORE"}'
+export BACKUP_ACTIVE_KEY_ID='onishield-lab-key-01'
 export BACKUP_DIRECTORY='/secure/backups/onishield'
 node scripts/backup-postgres.mjs create
 ```
@@ -38,7 +38,7 @@ A completed command means the encrypted artifact and manifest were written. It d
 
 ## Verify an artifact
 
-Set the same encryption key and key ID, then identify the exact matching artifact and manifest:
+Provide a keyring containing the historical key ID named by the authenticated manifest. The active key may be newer; verification and restore select the historical key by manifest key ID. Then identify the exact matching artifact and manifest:
 
 ```sh
 export BACKUP_ARTIFACT='/secure/backups/onishield/backup-id.pgdump.enc'
@@ -75,7 +75,7 @@ The restore target must have required PostgreSQL roles and extensions provisione
 - Add retention only after legal, customer and storage-cost requirements are decided.
 - Add WAL archiving/PITR only after selecting and testing the actual PostgreSQL hosting model.
 - CI now includes a disposable PostgreSQL 16 create → verify → restore integration test with recovered-row and authentication-invalidation assertions. This test is authored and wired, not yet observed passing. A separate application/tenant-isolation drill is still required. Record measured duration and data-loss window before publishing RPO/RTO.
-- Keep encryption keys outside the backup destination and test key recovery/rotation. Do not place the key in the manifest, repository, backup directory, or logs.
+- Keep encryption keys outside the backup destination and test key recovery/rotation. `BACKUP_KEYRING_JSON` maps up to 32 key IDs to 64-character hexadecimal 32-byte keys; `BACKUP_ACTIVE_KEY_ID` selects the key used only for new backups. Verification and restore resolve the key ID from the authenticated manifest and fail closed if that historical key is unavailable. Never place key material in the manifest, repository, backup directory, status file, or logs. The legacy `BACKUP_ENCRYPTION_KEY` plus `BACKUP_ENCRYPTION_KEY_ID` pair remains supported for migration, but it cannot decrypt backups from other key IDs.
 - Do not treat local encrypted artifacts as ransomware-resistant: an attacker with write/delete access to the host can still destroy them.
 
 
@@ -130,7 +130,7 @@ The downloader fetches the exact version IDs returned by the bucket, checks obje
 The runner is deliberately separate from the API process. Do not start a timer inside each Fastify worker: multiple application replicas could create duplicate schedules and make backups dependent on API uptime. Use exactly one dedicated host scheduler or managed scheduled-job instance.
 
 Configure these environment variables in the scheduler's protected secret/environment facility:
-- All local backup variables: `DATABASE_URL`, `BACKUP_ENCRYPTION_KEY`, `BACKUP_ENCRYPTION_KEY_ID`, and `BACKUP_DIRECTORY`.
+- All local backup variables: `DATABASE_URL`, `BACKUP_KEYRING_JSON`, `BACKUP_ACTIVE_KEY_ID`, and `BACKUP_DIRECTORY`. Keep keyring JSON in the scheduler secret store; do not put it in a checked-in `.env` file.
 - For mandatory off-site protection, set `S3_BUCKET`, `S3_REGION`, provider endpoint settings if required, and the AWS SDK workload identity/credentials.
 - Set `BACKUP_UPLOAD_REQUIRED=true` so a missing `S3_BUCKET` causes the run to fail rather than silently accepting a local-only copy.
 
@@ -174,3 +174,17 @@ npm run backup:health
 - `npm run backup:health`
 
 All commands fail closed on missing key material, invalid manifest authentication, checksum mismatch, unknown artifact format, failed archive parsing, or unsafe restore target conditions.
+
+
+## Controlled encryption-key rotation
+
+Rotation changes the active key for future backups; it does not rewrite existing artifacts. Use a secrets-manager version or deployment change with an explicit operator approval:
+
+1. Generate a new independent 32-byte key and assign a new, never-reused key ID.
+2. Add the new key to `BACKUP_KEYRING_JSON` while retaining every old key still referenced by a retained or legal-hold backup. Set `BACKUP_ACTIVE_KEY_ID` to the new ID.
+3. Deploy the updated secret atomically to the backup runner and every restore environment. Do not print the keyring or expose it in deployment logs.
+4. Create a synthetic backup with the new active key and verify it. Separately verify and, where practical, restore representative older backups encrypted under each retained key ID.
+5. Record the rotation date, key ID, approver, secret-manager version, and the backup retention population covered by each key. Record no key material.
+6. Retire an old key only after an inventory proves that no retained, legal-hold, or otherwise required backup references it, and the recovery owner approves destruction. Never remove a key merely because a newer key is active.
+
+The keyring accepts 1–32 entries. IDs are restricted to 1–64 safe characters. A missing ID, malformed key, absent active key, or invalid keyring fails closed. The legacy single-key variables remain a temporary compatibility path; migrate to the keyring before performing multi-key rotation. Keyring parsing occurs in the backup CLI process, not in the API service. Do not auto-rotate keys or generate replacement keys at runtime.
