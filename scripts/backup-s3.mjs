@@ -50,6 +50,7 @@ async function headAndVerify(client, bucket, key, expected, retentionDate) {
   if (head.Metadata?.sha256 !== expected.sha256 ||
       head.Metadata?.backup_id !== expected.backupId ||
       head.Metadata?.object_kind !== expected.kind ||
+      !head.VersionId ||
       head.ObjectLockMode !== "COMPLIANCE" ||
       !head.ObjectLockRetainUntilDate ||
       new Date(head.ObjectLockRetainUntilDate) < retentionDate ||
