@@ -132,10 +132,10 @@ BEGIN
     RAISE EXCEPTION 'Invalid finding status transition';
   END IF;
 
-  UPDATE onishield.detection_findings
+  UPDATE onishield.detection_findings AS target_finding
      SET status = p_new_status, updated_at = changed
-   WHERE tenant_id = trusted_session.tenant_id
-     AND finding_id = p_finding_id;
+   WHERE target_finding.tenant_id = trusted_session.tenant_id
+     AND target_finding.finding_id = p_finding_id;
 
   INSERT INTO onishield.detection_finding_status_audit
     (tenant_id, finding_id, membership_id, actor_operator_id,
