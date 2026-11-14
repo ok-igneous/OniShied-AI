@@ -123,6 +123,7 @@ test("matches only explicitly mapped event fields using exact normalized values"
 
   assert.equal(matches.length, 2);
   assert.ok(matches.every((match) => match.event_id === "event-1"));
+  assert.ok(matches.every((match) => match.connector_id === "connector-1"));
   assert.deepEqual(
     matches.map((match) => match.matched_field_path).sort(),
     ["data.domain", "data.source_ip"]
@@ -178,7 +179,27 @@ test("deduplicates repeated indicator records by indicator version and evidence 
   assert.equal(matches.length, 1);
 });
 
-test("rejects oversized candidate sets and invalid event identifiers", () => {
+test("keeps connector identity attached when event IDs collide across connectors", () => {
+  const fromA = matchThreatIndicators({
+    connectorId: "connector-a",
+    eventId: "shared-event",
+    data: { domain: "evil.test" },
+    indicators: [indicator()],
+    now
+  });
+  const fromB = matchThreatIndicators({
+    connectorId: "connector-b",
+    eventId: "shared-event",
+    data: { domain: "evil.test" },
+    indicators: [indicator()],
+    now
+  });
+
+  assert.equal(fromA[0]?.event_id, fromB[0]?.event_id);
+  assert.notEqual(fromA[0]?.connector_id, fromB[0]?.connector_id);
+});
+
+test("rejects oversized candidate sets and invalid event or connector identifiers", () => {
   assert.throws(
     () => matchThreatIndicators({
       connectorId: "connector-1",
@@ -187,6 +208,16 @@ test("rejects oversized candidate sets and invalid event identifiers", () => {
       indicators: Array.from({ length: 10_001 }, (_, index) =>
         indicator({ id: String(index) })
       ),
+      now
+    }),
+    IndicatorValidationError
+  );
+  assert.throws(
+    () => matchThreatIndicators({
+      connectorId: "",
+      eventId: "event-connector-invalid",
+      data: {},
+      indicators: [],
       now
     }),
     IndicatorValidationError
