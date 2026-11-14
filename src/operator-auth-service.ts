@@ -423,6 +423,48 @@ export class OperatorAuthService {
     };
   }
 
+  async listDetectionFindingStatusAudit(
+    token: string,
+    findingId: string
+  ): Promise<Array<{
+    findingId: string;
+    previousStatus: string;
+    newStatus: string;
+    reason: string;
+    requestId: string | null;
+    actorOperatorId: string;
+    actorDisplayName: string;
+    changedAt: string;
+  }>> {
+    await this.authorize(token, "detection:read");
+    if (!/^[a-f0-9]{64}$/.test(findingId)) {
+      throw new Error("Invalid finding history request");
+    }
+    const result = await this.database.query<{
+      finding_id: string;
+      previous_status: string;
+      new_status: string;
+      reason: string;
+      request_id: string | null;
+      actor_operator_id: string;
+      actor_display_name: string;
+      changed_at: Date | string;
+    }>(
+      "SELECT * FROM onishield.list_detection_finding_status_audit($1,$2)",
+      [hashOperatorSessionToken(token), findingId]
+    );
+    return result.rows.map((row) => ({
+      findingId: row.finding_id,
+      previousStatus: row.previous_status,
+      newStatus: row.new_status,
+      reason: row.reason,
+      requestId: row.request_id,
+      actorOperatorId: row.actor_operator_id,
+      actorDisplayName: row.actor_display_name,
+      changedAt: (row.changed_at instanceof Date ? row.changed_at : new Date(row.changed_at)).toISOString()
+    }));
+  }
+
   async logout(token: string): Promise<void> {
     let tokenHash: string;
     try { tokenHash = hashOperatorSessionToken(token); } catch { return; }
