@@ -37,6 +37,7 @@ test("rejects invalid IP and malformed timestamps",()=>{
 });
 
 import { evaluateDetections } from "./detection-engine.js";
+import { securityEventSchema } from "./security-event.js";
 
 test("endpoint-normalized authentication failures enter deterministic detection",()=>{
   const events=Array.from({length:8},(_,index)=>({
@@ -64,6 +65,7 @@ test("endpoint-normalized authentication failures enter deterministic detection"
       agent_event_kind:"authentication"
     }
   }));
+  for(const event of events) assert.equal(securityEventSchema.safeParse(event).success,true);
   const findings=evaluateDetections(events);
   assert.equal(findings.length,1);
   assert.equal(findings[0]?.rule_id,"AUTH_FAILURE_BURST");
