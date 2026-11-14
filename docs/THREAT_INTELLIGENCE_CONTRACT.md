@@ -38,7 +38,7 @@ Supported indicator types:
 - SHA-256 hex digests.
 - Conservative ASCII email addresses with IDNA-normalized domains.
 
-Only these explicit event data fields are examined: `source_ip`, `destination_ip`, `domain`, `url`, `file_hash_sha256`, and `email_address`. The matcher does not recursively inspect arbitrary event data. Matching is exact; no DNS lookups, URL requests, file access, regex indicators, or external network activity occur.
+Only these explicit event data fields are examined: `source_ip`, `source_address`, `destination_ip`, `domain`, `url`, `file_hash_sha256`, and `email_address`. `source_address` is mapped to IPv4/IPv6 indicators so the authentication detection scenarios can be enriched when their source value is a bare IP address. The matcher does not recursively inspect arbitrary event data. Matching is exact; no DNS lookups, URL requests, file access, regex indicators, or external network activity occur.
 
 Only indicators with status `active`, a valid `valid_from`, and no elapsed `expires_at` can match. Pending, expired, revoked, and rejected indicators are ignored. Candidate processing is capped at 10,000 records per event; exceeding the cap fails closed rather than silently returning partial results.
 
