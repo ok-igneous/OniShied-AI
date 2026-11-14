@@ -207,6 +207,10 @@ This is not an initial release priority. Before building it, resolve:
 
 Start with trusted external feeds and local intelligence management. Consider customer-contributed intelligence only after validation and privacy controls are mature.
 
+## Detection engineering design
+
+- [Finding Lifecycle and Durable Replay Design](FINDING_LIFECYCLE_AND_REPLAY_DESIGN.md) — stable incident identity, evidence history, analyst workflow, and replay architecture.
+
 ## 4. Recommended delivery sequence
 
 ### Stage 1 — Trustworthy security foundation
