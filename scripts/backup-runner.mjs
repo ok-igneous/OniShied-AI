@@ -102,6 +102,7 @@ async function main() {
       await writeCommand(process.execPath, [s3Script, "upload"], verifyEnv);
       status.remote_upload = "uploaded_and_remote_metadata_verified";
     } else if (process.env.BACKUP_UPLOAD_REQUIRED === "true") {
+      status.remote_upload = "required_but_not_configured";
       throw new Error("BACKUP_UPLOAD_REQUIRED is true but S3_BUCKET is not configured");
     }
 
