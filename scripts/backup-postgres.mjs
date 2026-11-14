@@ -255,7 +255,7 @@ async function invalidateRestoredAuthenticationState(targetUrl) {
 async function queryScalar(url, sql) {
   return new Promise((resolve, reject) => {
     const child = spawn("psql", ["-X", "-w", "-v", "ON_ERROR_STOP=1", "-Atqc", sql], {
-      env: { ...process.env, PGDATABASE: url }, stdio: ["ignore", "pipe", "pipe"]
+      env: postgresEnvironment(url), stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "", stderr = "";
     child.stdout.setEncoding("utf8");
