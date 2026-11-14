@@ -14,6 +14,7 @@ The following work exists on an open PR stack based on `main`; it is not yet par
 - PR #25: evidence-grounded AI investigation worker, strict structured output validation, canonical evidence citation checks, TLP:CLEAR-only external threat metadata, immutable report history, and human-approval-only recommendations.
 - PR #26: early operator investigation console at `/operator`, using an existing operator session token; includes case creation, case review, finding association, notes, lifecycle transitions, and AI report review.
 - PR #27: operator-authenticated tenant-scoped finding discovery and selection, so analysts can search indexed title prefixes or exact finding IDs when creating cases.
+- PR #28 branch: deterministic server-side enforcement of AI report limitations when evidence is truncated or threat-intelligence matches are withheld/omitted, with regression tests.
 
 PRs #21–27 are open and must be merged in dependency order. Migrations 016–021 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
 
