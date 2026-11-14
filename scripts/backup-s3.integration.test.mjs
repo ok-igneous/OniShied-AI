@@ -127,7 +127,7 @@ test("S3 immutable-vault download and isolated PostgreSQL restore survive key ro
 
   const download = async (uploaded, directory, keyring, artifactName) => {
     assert.match(artifactName, /^[A-Za-z0-9._-]+\\.pgdump\\.enc$/);
-    const manifestName = `${backupId}.manifest.json`;
+    const manifestName = `${uploaded.backupId}.manifest.json`;
     const output = await run(process.execPath, ["scripts/backup-s3.mjs", "download"], {
       ...baseEnv,
       ...keyring,
