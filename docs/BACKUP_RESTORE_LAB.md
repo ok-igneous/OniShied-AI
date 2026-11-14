@@ -77,6 +77,38 @@ The restore target must have required PostgreSQL roles and extensions provisione
 - Keep encryption keys outside the backup destination and test key recovery/rotation. Do not place the key in the manifest, repository, backup directory, or logs.
 - Do not treat local encrypted artifacts as ransomware-resistant: an attacker with write/delete access to the host can still destroy them.
 
+
+## Off-site S3-compatible immutable vault
+
+The optional uploader stores an already-created local backup artifact and its authenticated manifest in an S3-compatible bucket. It uses the AWS SDK v3 default credential provider chain (for example, an attached workload role); no access key is stored in this repository or passed on a command line.
+
+Before enabling uploads, provision a dedicated bucket with **versioning enabled** and **Object Lock enabled**. Object Lock must be enabled when the bucket is created on providers that make this a creation-time setting. The uploader fails closed unless it can confirm both settings. It applies per-object **COMPLIANCE** retention; objects cannot be deleted or shortened during that retention period, including by privileged bucket administrators. Choose the retention period only after legal, privacy, and storage-cost review.
+
+Required environment:
+- `S3_BUCKET`: destination bucket.
+- `S3_REGION`: bucket region (defaults to `us-east-1`).
+- `S3_ENDPOINT`: optional provider endpoint for an S3-compatible service.
+- `S3_FORCE_PATH_STYLE=true`: optional path-style addressing for compatible endpoints that require it.
+- `S3_PREFIX`: optional object prefix (defaults to `onishield/postgres`).
+- `S3_RETENTION_DAYS`: compliance retention in days (defaults to 90; accepted range 1–3650).
+- Standard AWS SDK credentials: prefer workload identity/role credentials; never commit static credentials.
+
+After a local backup has been created, run the uploader with the exact artifact and manifest paths:
+
+```sh
+export BACKUP_ARTIFACT='/secure/backups/onishield/backup-id.pgdump.enc'
+export BACKUP_MANIFEST='/secure/backups/onishield/backup-id.manifest.json'
+export S3_BUCKET='your-locked-backup-bucket'
+export S3_REGION='your-bucket-region'
+export S3_PREFIX='onishield/postgres'
+export S3_RETENTION_DAYS='90'
+node scripts/backup-s3.mjs upload
+```
+
+The uploader first invokes the local verifier, which checks manifest HMAC, encrypted artifact SHA-256, AES-GCM authentication and PostgreSQL archive parsing. It then checks bucket versioning and Object Lock configuration, uploads both files using multipart-capable streaming, and checks remote object metadata, size, version ID and COMPLIANCE retention. It has no delete operation. An upload is not a restore drill: periodically retrieve both objects to an isolated environment and run the documented verification and PostgreSQL restore procedure.
+
+Use a separate cloud account/project from production where practical. The backup identity should be limited to the dedicated bucket/prefix and upload/verification operations; production application identities must not be able to delete backups or alter bucket retention. Configure alerts for failed uploads, missing expected backups, and retention/configuration drift. S3-compatible providers vary: the destination must implement bucket versioning, Object Lock configuration, COMPLIANCE retention and the multipart APIs used by the AWS SDK. A generic endpoint alone does not prove those guarantees.
+
 ## CLI actions
 
 - `node scripts/backup-postgres.mjs create`
