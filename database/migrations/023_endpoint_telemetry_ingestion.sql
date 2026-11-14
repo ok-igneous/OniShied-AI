@@ -1,4 +1,4 @@
--- Credential-authenticated endpoint telemetry with per-device replay protection.
+-- Credential-authenticated endpoint telemetry and canonical security-event bridge.
 CREATE TABLE onishield.endpoint_telemetry_events (
   tenant_id TEXT NOT NULL,
   agent_id UUID NOT NULL,
@@ -30,7 +30,10 @@ REVOKE ALL ON onishield.endpoint_telemetry_events FROM PUBLIC,onishield_app,onis
 
 CREATE FUNCTION onishield.ingest_endpoint_telemetry(
   p_credential_hash TEXT,p_events JSONB
-) RETURNS TABLE(accepted_count INTEGER,duplicate_count INTEGER,agent_id UUID)
+) RETURNS TABLE(
+  accepted_count INTEGER,duplicate_count INTEGER,agent_id UUID,
+  tenant_id TEXT,canonical_events JSONB
+)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,onishield AS $$
 DECLARE
   trusted RECORD;
@@ -43,67 +46,13 @@ DECLARE
   event_sequence BIGINT;
   existing_event JSONB;
   existing_id UUID;
+  was_inserted BOOLEAN;
+  normalized_event JSONB;
+  normalized_type TEXT;
+  normalized_events JSONB := '[]'::JSONB;
+  connector_identity TEXT;
 BEGIN
-  IF p_credential_hash !~ '^[a-f0-9]{64}
-
-  SELECT a.id,a.tenant_id,a.platform,a.status
-    INTO trusted
-    FROM onishield.endpoint_agents a
-   WHERE a.credential_hash=p_credential_hash
-   FOR UPDATE;
-  IF NOT FOUND OR trusted.status <> 'active' THEN
-    RAISE EXCEPTION 'Unauthorized endpoint credential';
-  END IF;
-
-  FOR item IN SELECT value FROM jsonb_array_elements(p_events) LOOP
-    BEGIN
-      event_agent := (item->>'agent_id')::UUID;
-      event_boot := (item->>'boot_id')::UUID;
-      event_id_value := (item->>'event_id')::UUID;
-      event_sequence := (item->>'sequence')::BIGINT;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE EXCEPTION 'Invalid endpoint event identity';
-    END;
-    IF event_agent <> trusted.id OR item->>'platform' <> trusted.platform
-       OR event_sequence <= 0
-       OR item->>'kind' NOT IN (
-         'heartbeat','process_start','authentication','network_connection','file_integrity','service_change'
-       )
-       OR (item->>'observed_at') IS NULL OR (item->>'collected_at') IS NULL THEN
-      RAISE EXCEPTION 'Endpoint event identity or platform mismatch';
-    END IF;
-
-    INSERT INTO onishield.endpoint_telemetry_events(
-      tenant_id,agent_id,boot_id,sequence,event_id,event_kind,
-      observed_at,collected_at,event_json
-    ) VALUES (
-      trusted.tenant_id,trusted.id,event_boot,event_sequence,event_id_value,item->>'kind',
-      (item->>'observed_at')::TIMESTAMPTZ,(item->>'collected_at')::TIMESTAMPTZ,item
-    ) ON CONFLICT DO NOTHING;
-
-    IF FOUND THEN
-      inserted_count := inserted_count + 1;
-    ELSE
-      SELECT e.event_json,e.event_id INTO existing_event,existing_id
-        FROM onishield.endpoint_telemetry_events e
-       WHERE e.tenant_id=trusted.tenant_id AND e.agent_id=trusted.id
-         AND e.boot_id=event_boot AND e.sequence=event_sequence;
-      IF NOT FOUND OR existing_id <> event_id_value OR existing_event <> item THEN
-        RAISE EXCEPTION 'Endpoint sequence replay conflict';
-      END IF;
-      duplicates := duplicates + 1;
-    END IF;
-  END LOOP;
-
-  UPDATE onishield.endpoint_agents
-     SET last_seen_at=GREATEST(COALESCE(last_seen_at,'-infinity'::TIMESTAMPTZ),NOW())
-   WHERE tenant_id=trusted.tenant_id AND id=trusted.id;
-  PERFORM set_config('app.tenant_id',trusted.tenant_id,true);
-  RETURN QUERY SELECT inserted_count,duplicates,trusted.id;
-END; $$;
-REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO onishield_auth;
-
+  IF p_credential_hash !~ '^[a-f0-9]{64}$'
      OR jsonb_typeof(p_events) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'Invalid endpoint telemetry batch';
   END IF;
@@ -111,7 +60,7 @@ GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO oni
     RAISE EXCEPTION 'Invalid endpoint telemetry batch';
   END IF;
 
-  SELECT a.id,a.tenant_id,a.platform,a.status
+  SELECT a.id,a.tenant_id,a.platform,a.status,a.hostname
     INTO trusted
     FROM onishield.endpoint_agents a
    WHERE a.credential_hash=p_credential_hash
@@ -119,6 +68,8 @@ GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO oni
   IF NOT FOUND OR trusted.status <> 'active' THEN
     RAISE EXCEPTION 'Unauthorized endpoint credential';
   END IF;
+  PERFORM set_config('app.tenant_id',trusted.tenant_id,true);
+  connector_identity := 'endpoint:' || trusted.id::TEXT;
 
   FOR item IN SELECT value FROM jsonb_array_elements(p_events) LOOP
     BEGIN
@@ -145,9 +96,63 @@ GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO oni
       trusted.tenant_id,trusted.id,event_boot,event_sequence,event_id_value,item->>'kind',
       (item->>'observed_at')::TIMESTAMPTZ,(item->>'collected_at')::TIMESTAMPTZ,item
     ) ON CONFLICT DO NOTHING;
+    was_inserted := FOUND;
 
-    IF FOUND THEN
+    IF was_inserted THEN
       inserted_count := inserted_count + 1;
+      normalized_type := CASE item->>'kind'
+        WHEN 'heartbeat' THEN 'endpoint.agent.heartbeat'
+        WHEN 'process_start' THEN 'endpoint.process.start'
+        WHEN 'authentication' THEN
+          CASE item->'data'->>'result'
+            WHEN 'failure' THEN 'identity.authentication.failure'
+            WHEN 'success' THEN 'identity.authentication.success'
+            ELSE 'endpoint.authentication.unknown'
+          END
+        WHEN 'network_connection' THEN 'endpoint.network.connection'
+        WHEN 'file_integrity' THEN 'endpoint.file.integrity'
+        WHEN 'service_change' THEN 'endpoint.service.change'
+      END;
+
+      normalized_event := jsonb_build_object(
+        'schema_version','0.1.0',
+        'event_id',event_id_value::TEXT,
+        'tenant_id',trusted.tenant_id,
+        'source',jsonb_build_object(
+          'connector_id',connector_identity,
+          'kind','endpoint_agent',
+          'version',item->>'agent_version',
+          'host_ref',left(trusted.hostname,128)
+        ),
+        'event_type',normalized_type,
+        'observed_at',item->>'observed_at',
+        'ingested_at',NOW(),
+        'severity_hint','unknown',
+        'provenance',jsonb_build_object(
+          'record_ref',event_id_value::TEXT,
+          'collection_method','agent'
+        ),
+        'data',(item->'data') || jsonb_build_object(
+          'endpoint_agent_id',trusted.id::TEXT,
+          'boot_id',event_boot::TEXT,
+          'sequence',event_sequence,
+          'agent_event_kind',item->>'kind'
+        )
+      );
+
+      INSERT INTO onishield.security_events(
+        tenant_id,connector_id,event_id,schema_version,event_type,
+        observed_at,ingested_at,severity_hint,event_json
+      ) VALUES (
+        trusted.tenant_id,connector_identity,event_id_value::TEXT,'0.1.0',
+        normalized_type,(item->>'observed_at')::TIMESTAMPTZ,NOW(),'unknown',normalized_event
+      ) ON CONFLICT (tenant_id,connector_id,event_id) DO NOTHING;
+
+      INSERT INTO onishield.detection_replay_jobs(tenant_id,connector_id,event_id)
+      VALUES (trusted.tenant_id,connector_identity,event_id_value::TEXT)
+      ON CONFLICT (tenant_id,connector_id,event_id) DO NOTHING;
+
+      normalized_events := normalized_events || jsonb_build_array(normalized_event);
     ELSE
       SELECT e.event_json,e.event_id INTO existing_event,existing_id
         FROM onishield.endpoint_telemetry_events e
@@ -163,8 +168,7 @@ GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO oni
   UPDATE onishield.endpoint_agents
      SET last_seen_at=GREATEST(COALESCE(last_seen_at,'-infinity'::TIMESTAMPTZ),NOW())
    WHERE tenant_id=trusted.tenant_id AND id=trusted.id;
-  PERFORM set_config('app.tenant_id',trusted.tenant_id,true);
-  RETURN QUERY SELECT inserted_count,duplicates,trusted.id;
+  RETURN QUERY SELECT inserted_count,duplicates,trusted.id,trusted.tenant_id,normalized_events;
 END; $$;
 REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO onishield_auth;
