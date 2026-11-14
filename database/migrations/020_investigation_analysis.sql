@@ -30,6 +30,10 @@ CREATE TABLE onishield.investigation_analysis_jobs (
 CREATE INDEX investigation_analysis_jobs_claim_idx
   ON onishield.investigation_analysis_jobs(tenant_id,status,available_at,created_at);
 
+CREATE UNIQUE INDEX investigation_analysis_one_active_job_per_case_idx
+  ON onishield.investigation_analysis_jobs(tenant_id,case_id)
+  WHERE status IN ('pending','processing');
+
 CREATE TABLE onishield.investigation_analysis_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id TEXT NOT NULL,
@@ -125,6 +129,15 @@ BEGIN
    WHERE c.tenant_id=session_row.tenant_id AND c.id=p_case_id
      AND c.status NOT IN ('resolved','closed') FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Investigation case not found or closed'; END IF;
+  SELECT id INTO job FROM onishield.investigation_analysis_jobs
+   WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
+     AND status IN ('pending','processing') ORDER BY created_at DESC LIMIT 1;
+  IF job IS NOT NULL THEN RETURN job; END IF;
+  SELECT id INTO job FROM onishield.investigation_analysis_jobs
+   WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
+     AND created_at>NOW()-INTERVAL '10 minutes'
+   ORDER BY created_at DESC LIMIT 1;
+  IF job IS NOT NULL THEN RETURN job; END IF;
   INSERT INTO onishield.investigation_analysis_jobs
     (tenant_id,case_id,requested_by_operator_id,requested_by_membership_id,request_id)
   VALUES(session_row.tenant_id,p_case_id,session_row.operator_id,session_row.membership_id,p_request_id)
@@ -210,11 +223,19 @@ BEGIN
      OR p_lease_ms NOT BETWEEN 10000 AND 600000 THEN
     RAISE EXCEPTION 'Invalid investigation worker scope';
   END IF;
+  UPDATE onishield.investigation_analysis_jobs
+     SET status='dead_letter',lease_token=NULL,lease_until=NULL,
+         last_error='worker_lease_expired_after_max_attempts',updated_at=NOW()
+   WHERE tenant_id=p_tenant_id AND status='processing'
+     AND lease_until<NOW() AND attempts>=6;
+  UPDATE onishield.investigation_analysis_jobs
+     SET status='dead_letter',last_error='max_attempts_exceeded',updated_at=NOW()
+   WHERE tenant_id=p_tenant_id AND status='pending' AND attempts>=6;
   SELECT j.id,j.case_id INTO selected
     FROM onishield.investigation_analysis_jobs j
    WHERE j.tenant_id=p_tenant_id AND (
-     (j.status='pending' AND j.available_at<=NOW()) OR
-     (j.status='processing' AND j.lease_until<NOW())
+     (j.status='pending' AND j.available_at<=NOW() AND j.attempts<6) OR
+     (j.status='processing' AND j.lease_until<NOW() AND j.attempts<6)
    )
    ORDER BY j.available_at,j.created_at,j.id
    LIMIT 1 FOR UPDATE SKIP LOCKED;
