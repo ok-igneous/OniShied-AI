@@ -8,7 +8,7 @@ ALTER TABLE onishield.detection_findings
 
 -- Backfill structured references from the legacy connector:event string only
 -- when each reference maps to exactly one canonical stored event.
-DO $
+DO $$
 BEGIN
   IF EXISTS (
     SELECT 1
@@ -25,7 +25,7 @@ BEGIN
       'Cannot backfill structured finding evidence: one or more legacy references are ambiguous or missing';
   END IF;
 END;
-$;
+$$;
 
 UPDATE onishield.detection_findings AS f
 SET evidence_event_refs = COALESCE((
