@@ -33,14 +33,22 @@
 - The worker has no tools or response execution path. Recommendations are advisory and every recommendation requires human approval.
 - New routes: POST /v1/operator/investigations/:caseId/analyze and GET /v1/operator/investigations/:caseId/reports. Worker command: npm run start:investigation-worker.
 
+## Operator investigation console
+
+- A responsive operator workspace is served at `/operator`.
+- Operators paste an existing operator session token; the console does not collect passwords or issue sessions. The token is held in browser session storage for the tab and can be cleared with Disconnect.
+- The console lists cases, opens case evidence and activity, requests AI analysis, checks queue status, loads immutable report history, and adds analyst notes.
+- API calls use same-origin authenticated endpoints and no-store caching. The page sets a restrictive Content Security Policy and does not load third-party scripts, fonts, images, or analytics.
+- The console is an operational first slice, not a complete SOC dashboard. It does not create cases from arbitrary findings or manage finding lifecycle transitions yet.
+
 ## Deliberate limitations
 
-- No AI provider integration, generated report, analysis worker, assignment API, case status transition API, dashboard, or automatic correlation yet.
+- No full SOC dashboard, assignment API, case status transition API, or automatic finding-to-case correlation yet.
 - Initial case creation requires explicit finding IDs and a human reason. No LLM or text similarity is used to merge cases.
 - One finding can belong to only one case in this release, including resolved cases; audited case merge/re-parenting is deferred.
 - Case priority is a snapshot at creation; it is not dynamically recomputed when finding severity changes.
 - Evidence is referenced from canonical finding evidence; event payloads are not copied into investigation records.
-- The SQL smoke tests are authored but not executed. Migrations 019 and 020 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run.
+- The SQL smoke tests are authored but not executed. Migrations 019 and 020 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run. The operator console has been authored but not browser-tested.
 - Concurrent duplicate protection relies on database uniqueness and transaction semantics; a concurrent database stress test remains outstanding.
 
 ## Verification gate
