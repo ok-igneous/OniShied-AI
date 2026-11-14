@@ -1,6 +1,5 @@
--- Run as database administrator after migrations 001-019.
--- Validates authenticated case creation, evidence visibility, idempotent links,
--- append-only activity privileges, and cross-tenant case isolation.
+-- Run as database administrator after migrations 001-020.
+-- Validates case isolation, analysis job leasing, immutable report persistence, and audit integrity.
 BEGIN;
 SET LOCAL ROLE onishield_owner;
 SELECT set_config('app.tenant_id','investigation-tenant-a',true);
@@ -93,9 +92,66 @@ BEGIN
   END IF;
 END $$;
 
+
+SET LOCAL ROLE onishield_auth;
+DO $
+DECLARE cid UUID; job UUID;
+BEGIN
+  SELECT id INTO cid FROM onishield.investigation_cases
+   WHERE tenant_id='investigation-tenant-a' AND title='Authentication activity review';
+  job := onishield.request_investigation_analysis(
+    repeat('a',64),cid,'investigation-analysis-smoke-request'
+  );
+  IF job IS NULL THEN RAISE EXCEPTION 'Analysis request did not create or return a job'; END IF;
+END $;
+
 SET LOCAL ROLE onishield_app;
 SELECT set_config('app.tenant_id','investigation-tenant-a',true);
-DO $$
+DO $
+DECLARE claimed RECORD; version_number INTEGER;
+BEGIN
+  SELECT * INTO claimed FROM onishield.claim_investigation_analysis_job(
+    'investigation-tenant-a',180000
+  );
+  IF claimed.job_id IS NULL OR claimed.input->'findings' IS NULL THEN
+    RAISE EXCEPTION 'Analysis worker did not claim a job with evidence input';
+  END IF;
+  IF jsonb_array_length(claimed.input->'findings'->0->'evidence') <> 1 THEN
+    RAISE EXCEPTION 'Analysis worker input did not include canonical evidence';
+  END IF;
+  version_number := onishield.complete_investigation_analysis_job(
+    'investigation-tenant-a',claimed.job_id,claimed.lease_token,
+    'openai','test-model','investigation-report-v1',repeat('c',64),
+    '{"summary":"Test report","summary_evidence_refs":[{"connector_id":"investigation-connector","event_id":"investigation-event"}],"timeline":[],"hypotheses":[],"recommendations":[],"limitations":[]}'::jsonb
+  );
+  IF version_number <> 1 THEN RAISE EXCEPTION 'Expected first report version'; END IF;
+END $;
+
+SET LOCAL ROLE onishield_owner;
+DO $
+DECLARE report_id UUID;
+BEGIN
+  SELECT id INTO report_id FROM onishield.investigation_analysis_reports
+   WHERE tenant_id='investigation-tenant-a';
+  IF report_id IS NULL THEN RAISE EXCEPTION 'Expected immutable investigation report'; END IF;
+  BEGIN
+    UPDATE onishield.investigation_analysis_reports
+       SET report='{"tampered":true}'::jsonb WHERE id=report_id;
+    RAISE EXCEPTION 'Investigation report unexpectedly updated';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'Investigation analysis reports are immutable' THEN RAISE; END IF;
+  END;
+  BEGIN
+    DELETE FROM onishield.investigation_analysis_reports WHERE id=report_id;
+    RAISE EXCEPTION 'Investigation report unexpectedly deleted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'Investigation analysis reports are immutable' THEN RAISE; END IF;
+  END;
+END $;
+
+SET LOCAL ROLE onishield_app;
+SELECT set_config('app.tenant_id','investigation-tenant-a',true);
+DO $
 BEGIN
   BEGIN
     UPDATE onishield.investigation_activity SET reason='tampered audit entry'
