@@ -195,6 +195,7 @@ function handleError(
   if (/not found|not exist/.test(message)) return reply.code(404).send({ error: "investigation_resource_not_found" });
   if (/duplicate key|investigation_case_findings_one_case_per_finding_idx/.test(message)) return reply.code(409).send({ error: "finding_already_associated" });
   if (/finding limit reached|exceeds supported analysis scope/.test(message)) return reply.code(409).send({ error: "investigation_case_scope_limit_reached" });
+  if (/analysis tenant rate limit/.test(message)) return reply.code(429).send({ error: "investigation_analysis_rate_limited" });
   if (/Invalid investigation|Duplicate finding/.test(message)) {
     return reply.code(400).send({ error: "invalid_investigation_request" });
   }
