@@ -65,12 +65,19 @@ BEGIN
     RAISE EXCEPTION 'canonical events were not queued for detection replay';
   END IF;
 
+  UPDATE onishield.detection_replay_jobs SET status='dead_letter',
+    last_error='smoke_test_dead_letter'
+   WHERE tenant_id='endpoint-telemetry-smoke';
   SELECT * INTO retry_result FROM onishield.ingest_endpoint_telemetry(
     repeat('c',64),(SELECT jsonb_agg(event ORDER BY event->>'sequence') FROM telemetry_smoke_payload)
   );
   IF retry_result.accepted_count<>0 OR retry_result.duplicate_count<>2
-     OR jsonb_array_length(retry_result.canonical_events)<>0 THEN
-    RAISE EXCEPTION 'exact telemetry retry was not idempotent';
+     OR jsonb_array_length(retry_result.canonical_events)<>2 THEN
+    RAISE EXCEPTION 'exact telemetry retry did not safely requeue dead-lettered detection';
+  END IF;
+  IF (SELECT count(*) FROM onishield.detection_replay_jobs
+       WHERE tenant_id='endpoint-telemetry-smoke' AND status='pending')<>2 THEN
+    RAISE EXCEPTION 'dead-lettered detection jobs were not reset to pending';
   END IF;
   BEGIN
     PERFORM * FROM onishield.ingest_endpoint_telemetry(
