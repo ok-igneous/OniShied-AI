@@ -124,6 +124,7 @@ async function createBackup() {
       key_id: keyId,
       source: databaseIdentity(databaseUrl),
       scope: "single PostgreSQL database; global roles and cluster-wide objects are excluded",
+      database_server_version: await queryScalar(databaseUrl, "SHOW server_version"),
       pg_dump_version: (await commandOutput("pg_dump", ["--version"])).trim()
     }, keys.manifestKey);
     const manifestPath = path.join(backupDirectory, `${id}.manifest.json`);
