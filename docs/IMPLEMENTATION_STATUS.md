@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last updated:** 2026-11-13  
+**Last updated:** 2026-11-14  
 **Environment:** Repository changes are being made through GitHub; the founder currently has no working development PC.
 
 ## Implemented in the repository
@@ -25,6 +25,8 @@
 - Resend transactional-email transport plus operator invitation, email-verification, and password-reset backend workflows. Action tokens are random, HMAC-digested before database storage, short-lived, one-use, and audited. Invitation acceptance creates a verified operator and tenant membership transactionally; password reset revokes active sessions. Login now requires verified email. Unit tests cover token handling and generic reset behavior; PostgreSQL smoke coverage is included in CI. Frontend fragment-token pages and live Resend configuration remain outstanding.
 
 ## Important implementation boundaries
+
+- Consolidated accepted product direction for native intelligence, multi-model AI/provider gateway, adaptive learning, Autopilot, backup/recovery, subscription AI allowance and credits, shared threat intelligence, and the intelligence dashboard is documented in [CONSOLIDATED_NEW_FEATURES_SPEC.md](CONSOLIDATED_NEW_FEATURES_SPEC.md). The specification is not an implementation claim; each capability retains the status and release gates below.
 
 - Threat-intelligence matching is an internal callable service; it is not wired into event ingestion or an autonomous response path.
 - Human operator routes exist only on the server's current `127.0.0.1` listener and require the dedicated `onishield_auth` database connection. Do not expose them remotely. The normal `onishield_app` role cannot read password hashes or session digests, or modify memberships. Persistent account/IP throttling and operator-attributed review audit are implemented but unverified. Device labels, remote browser/mobile token transport, TLS/origin controls, and throttle-retention cleanup remain unimplemented. Invitation, email verification, and password reset backend workflows are implemented but unverified; frontend token pages and live Resend delivery remain outstanding. Enrolled accounts require TOTP at login; owner/admin/reviewer roles cannot complete privileged step-up without enrolled MFA. MFA enrollment, login challenge, replay prevention, disablement, and audit are implemented in code but remain unverified.
