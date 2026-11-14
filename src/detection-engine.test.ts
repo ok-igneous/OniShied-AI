@@ -105,7 +105,7 @@ test("findings carry deterministic IDs and immutable evidence references", () =>
   const first = evaluateDetections(events)[0]!;
   const second = evaluateDetections(events)[0]!;
   assert.equal(first.finding_id, second.finding_id);
-  assert.deepEqual(first.evidence_event_ids, events.map((item) => item.event_id));
+  assert.deepEqual(first.evidence_event_ids, events.map((item) => `${item.source.connector_id}:${item.event_id}`));
   assert.equal(first.rule_version, "1.0.0");
 });
 
