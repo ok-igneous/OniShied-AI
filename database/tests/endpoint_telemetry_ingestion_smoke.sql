@@ -1,4 +1,4 @@
--- Run after migrations 001-023 in a disposable database as onishield_owner.
+-- Run after migrations 001-024 in a disposable database as onishield_owner.
 BEGIN;
 INSERT INTO onishield.operators(email,password_hash,display_name,status)
 VALUES ('endpoint-telemetry-smoke@example.invalid','test-only-not-a-real-password-hash','Endpoint Telemetry Smoke','active');
