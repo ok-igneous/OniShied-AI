@@ -136,6 +136,15 @@ BEGIN
   END;
   BEGIN
     PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('observed_at','not-a-timestamp'))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'malformed timestamp was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='malformed timestamp was accepted' THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
       repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object(
         'collected_at',(event->>'observed_at')::TIMESTAMPTZ-INTERVAL '6 minutes'))
         FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
