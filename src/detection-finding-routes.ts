@@ -7,6 +7,7 @@ import { listDetectionFindings } from "./detection-finding-store.js";
 import type { Pool } from "pg";
 import { registerInvestigationRoutes } from "./investigation-routes.js";
 import { registerOperatorInvestigationConsole } from "./operator-console.js";
+import { hashOperatorSessionToken } from "./operator-auth-crypto.js";
 
 function operatorBearer(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
@@ -28,6 +29,45 @@ export function registerDetectionFindingRoutes(
 ): void {
   registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
+  app.get("/v1/operator/findings", async (request, reply) => {
+    if (!operatorAuth || !authDatabase) {
+      return reply.code(503).send({ error: "operator_findings_unavailable" });
+    }
+    const token = operatorBearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const parsed = z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+      status: z.enum(["open","acknowledged","investigating","resolved","reopened","suppressed"]).optional(),
+      severity: z.enum(["info","low","medium","high","critical"]).optional(),
+      q: z.string().trim().max(100).optional()
+    }).strict().safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_operator_findings_query" });
+    try {
+      await operatorAuth.authorize(token, "detection:read");
+      const result = await authDatabase.query<{
+        finding_id: string; rule_id: string; title: string; explanation: string;
+        status: string; severity: string; confidence: string;
+        first_seen_at: Date | string; last_seen_at: Date | string;
+        evidence_event_refs: unknown; matched_conditions: unknown;
+        associated_case_id: string | null;
+      }>(
+        "SELECT * FROM onishield.list_operator_detection_findings($1,$2,$3,$4,$5)",
+        [hashOperatorSessionToken(token), parsed.data.limit, parsed.data.status ?? null,
+         parsed.data.severity ?? null, parsed.data.q ?? null]
+      );
+      reply.header("cache-control", "no-store");
+      return { findings: result.rows };
+    } catch (error) {
+      if (error instanceof Error && (error.message === "unauthorized" || /Unauthorized operator finding query/.test(error.message))) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (error instanceof Error && (error.message === "forbidden" || /Forbidden operator finding query/.test(error.message))) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      request.log.error({ err: error }, "Operator finding discovery failed");
+      return reply.code(503).send({ error: "operator_findings_unavailable" });
+    }
+  });
   app.get<{ Params: { findingId: string } }>(
     "/v1/operator/findings/:findingId/history",
     async (request, reply) => {
