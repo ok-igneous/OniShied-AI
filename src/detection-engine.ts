@@ -66,14 +66,20 @@ function makeFinding(input: {
 }): DetectionFinding {
   const events = [...input.events].sort(compareEvents);
   const evidenceIds = events.map((event) => `${event.source.connector_id}:${event.event_id}`);
+  const evidenceRefs = events.map((event) => ({
+    connector_id: event.source.connector_id,
+    event_id: event.event_id
+  }));
   const groupingKeyHash = digest(input.grouping);
-  const findingId = digest([
+  // Hash structured JSON rather than delimiter-concatenated identifiers. Connector
+  // and event IDs are opaque strings and may themselves contain ':' or '|'.
+  const findingId = digest(JSON.stringify([
     input.ruleId,
     "1.0.0",
     input.tenantId,
     groupingKeyHash,
-    ...evidenceIds
-  ].join("|"));
+    evidenceRefs
+  ]));
 
   return {
     finding_id: findingId,
@@ -88,10 +94,7 @@ function makeFinding(input: {
     first_seen_at: events[0]!.observed_at,
     last_seen_at: events[events.length - 1]!.observed_at,
     evidence_event_ids: evidenceIds,
-    evidence_event_refs: events.map((event) => ({
-      connector_id: event.source.connector_id,
-      event_id: event.event_id
-    })),
+    evidence_event_refs: evidenceRefs,
     grouping_key_hash: groupingKeyHash,
     matched_conditions: input.matched,
     known_limitations: input.limitations
