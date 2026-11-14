@@ -165,4 +165,14 @@ CREATE TRIGGER endpoint_telemetry_rate_limit_before_insert
 REVOKE ALL ON FUNCTION onishield.endpoint_telemetry_event_is_valid(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.enforce_endpoint_telemetry_rate_limit() FROM PUBLIC;
 
+-- The public telemetry route uses a dedicated login role. It can invoke only
+-- this narrow SECURITY DEFINER function and cannot read/write application tables.
+GRANT USAGE ON SCHEMA onishield TO onishield_ingest;
+REVOKE ALL ON ALL TABLES IN SCHEMA onishield FROM onishield_ingest;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA onishield FROM onishield_ingest;
+REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB)
+  FROM PUBLIC,onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB)
+  TO onishield_ingest;
+
 COMMIT;
