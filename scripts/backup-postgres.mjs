@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import {
@@ -87,10 +87,12 @@ async function createBackup() {
   required(keyId, "BACKUP_ENCRYPTION_KEY_ID");
   const keys = deriveBackupKeys(required(masterKey, "BACKUP_ENCRYPTION_KEY"));
   await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
+  await chmod(backupDirectory, 0o700);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}`;
   const artifact = `${id}.pgdump.enc`;
   const artifactPath = path.join(backupDirectory, artifact);
   const temporaryPath = `${artifactPath}.partial`;
+  const manifestTemporaryPath = path.join(backupDirectory, `${id}.manifest.json.partial`);
   const iv = randomBytes(12);
   const cipher = createBackupCipher(keys.encryptionKey, iv);
   const output = createWriteStream(temporaryPath, { mode: 0o600, flags: "wx" });
@@ -136,6 +138,7 @@ async function createBackup() {
     child.kill("SIGTERM");
     await rm(temporaryPath, { force: true });
     await rm(artifactPath, { force: true });
+    await rm(manifestTemporaryPath, { force: true });
     throw error;
   }
 }
