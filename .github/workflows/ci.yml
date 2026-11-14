@@ -64,6 +64,8 @@ jobs:
             -v ON_ERROR_STOP=1 -f database/tests/tenant_rls_smoke.sql
           psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/threat_intelligence_rls_smoke.sql
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \
+            -v ON_ERROR_STOP=1 -f database/tests/detection_findings_rls_smoke.sql
 
       - name: Verify threat-intelligence reviewer controls
         env:
