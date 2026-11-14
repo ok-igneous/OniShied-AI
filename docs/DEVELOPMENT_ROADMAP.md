@@ -1,5 +1,7 @@
 # Development Roadmap
 
+Consolidated accepted feature architecture: [New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md). This roadmap is dependency-ordered; feature specifications do not imply implementation.
+
 This roadmap is staged. Each phase has a measurable exit gate; do not move forward because a calendar date has arrived.
 
 ## Phase 0 — Foundation
@@ -30,7 +32,9 @@ Design artefacts: [initial detection scenario catalogue](DETECTION_SCENARIOS.md)
 
 **Exit gate:** deterministic findings with explainable evidence.
 
-## Phase 3 — AI investigation
+## Phase 3 — AI investigation and provider gateway
+
+Supporting architecture: provider-neutral multi-model gateway, task-based routing, usage metering, budget enforcement, and safe native-only fallback are specified in [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md). Exact provider/model choices require current evaluation and pricing review.
 
 Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [investigation engine](INVESTIGATION_ENGINE_CONTRACT.md). These are specifications, not implemented services.
 - [ ] Define structured investigation result schema.
@@ -42,6 +46,8 @@ Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [in
 **Exit gate:** AI produces bounded, evidence-linked investigation summaries without action privileges.
 
 ## Phase 3.5 — Adaptive intelligence learning
+
+Cross-feature learning and governance requirements are also specified in [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md).
 
 Design contract: [Adaptive Intelligence Learning](ADAPTIVE_INTELLIGENCE_LEARNING.md). This is an accepted design direction, not an implemented learning service.
 - [ ] Define strict candidate schemas for AI discoveries, incident outcomes, operator corrections, and approved external intelligence.
@@ -56,6 +62,8 @@ Design contract: [Adaptive Intelligence Learning](ADAPTIVE_INTELLIGENCE_LEARNING
 
 ## Phase 4 — Policy-gated response and configurable Autopilot
 
+Customer controls, risk tiers, execution safeguards, and boundaries are summarized in [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md).
+
 Normative contract: [Configurable Autopilot](AUTOPILOT_CONTRACT.md). This is a design contract, not an implemented feature.
 - [ ] Define action registry and deterministic risk tiers.
 - [ ] Implement tenant-scoped Autopilot policy (default OFF), modes, per-action allowlist, target scope, and policy versioning.
@@ -69,6 +77,8 @@ Normative contract: [Configurable Autopilot](AUTOPILOT_CONTRACT.md). This is a d
 
 ## Phase 5 — Backup and disaster recovery
 
+Backup architecture, restore verification, and RPO/RTO measurement are summarized in [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md).
+
 Normative contract: [Backup and Disaster Recovery](BACKUP_AND_RECOVERY.md). This is a design contract, not an implemented backup service.
 - [ ] Inventory recoverable data classes, exclusions, retention, and tenant restore boundaries.
 - [ ] Select backup/PITR provider and isolated backup account/destination.
@@ -80,6 +90,8 @@ Normative contract: [Backup and Disaster Recovery](BACKUP_AND_RECOVERY.md). This
 **Exit gate:** a documented, repeatable restore into a clean environment with measured recovery objectives and verified tenant/audit integrity.
 
 ## Phase 6 — Operator experience
+
+The intelligence dashboard must expose measured native/AI performance, usage/credits, learning review, Autopilot, and recovery health. See [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md).
 - [ ] Build desktop operational view.
 - [ ] Add alert details, evidence, approvals, and audit history.
 - [ ] Add mobile alert review and approval experience.
