@@ -67,7 +67,9 @@ async function downloadLockedObject(client, bucket, key, destination, expected, 
   const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
   if (!head.VersionId || head.Metadata?.backup_id !== backupId ||
       head.Metadata?.object_kind !== kind || head.ObjectLockMode !== "COMPLIANCE" ||
-      !head.ObjectLockRetainUntilDate || !Number.isInteger(head.ContentLength)) {
+      !head.ObjectLockRetainUntilDate ||
+      new Date(head.ObjectLockRetainUntilDate).getTime() <= Date.now() ||
+      !Number.isInteger(head.ContentLength)) {
     throw new Error(`Remote object is missing required identity, version or COMPLIANCE retention: ${key}`);
   }
   const response = await client.send(new GetObjectCommand({
