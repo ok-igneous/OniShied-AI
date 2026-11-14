@@ -43,3 +43,27 @@ test("AES-GCM rejects ciphertext modified after backup creation", () => {
     decipher.final();
   });
 });
+
+import { isLocalPostgresHost, postgresEnvironment } from "./backup-postgres-connection.mjs";
+
+test("PostgreSQL URL maps connection fields without putting the URL in PGDATABASE", () => {
+  const env = postgresEnvironment(
+    "postgresql://backup%40user:p%40ss%3Aword@db.example.test:5544/onishield%20lab?sslmode=require&application_name=onishield-backup",
+    { PATH: "/usr/bin", PGDATABASE: "stale-value" }
+  );
+  assert.equal(env.PGHOST, "db.example.test");
+  assert.equal(env.PGPORT, "5544");
+  assert.equal(env.PGDATABASE, "onishield lab");
+  assert.equal(env.PGUSER, "backup@user");
+  assert.equal(env.PGPASSWORD, "p@ss:word");
+  assert.equal(env.PGSSLMODE, "require");
+  assert.equal(env.PGAPPNAME, "onishield-backup");
+  assert.equal(env.PATH, "/usr/bin");
+});
+
+test("IPv4, IPv6 and localhost restore targets are recognized as local", () => {
+  assert.equal(isLocalPostgresHost("127.0.0.1"), true);
+  assert.equal(isLocalPostgresHost("[::1]"), true);
+  assert.equal(isLocalPostgresHost("LOCALHOST"), true);
+  assert.equal(isLocalPostgresHost("db.example.test"), false);
+});
