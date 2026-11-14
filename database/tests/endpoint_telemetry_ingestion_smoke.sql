@@ -91,6 +91,15 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='cross-agent event was accepted' THEN RAISE; END IF;
   END;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('agent_version','9.9.9'))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'unregistered agent version was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='unregistered agent version was accepted' THEN RAISE; END IF;
+  END;
 END $$;
 
 SELECT onishield.revoke_endpoint_agent(
