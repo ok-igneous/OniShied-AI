@@ -92,6 +92,12 @@ async function main() {
   const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
   const bucket = required(process.env.S3_BUCKET, "S3_BUCKET");
   const region = process.env.S3_REGION || "us-east-1";
+  if (process.env.S3_ENDPOINT) {
+    const endpoint = new URL(process.env.S3_ENDPOINT);
+    if (endpoint.protocol !== "https:") {
+      throw new Error("S3_ENDPOINT must use HTTPS; plaintext object-storage connections are refused");
+    }
+  }
   const prefix = (process.env.S3_PREFIX || "onishield/postgres").split("/").filter(Boolean).join("/");
   const retentionDays = integerSetting(process.env.S3_RETENTION_DAYS, 90, "S3_RETENTION_DAYS", 1, 3650);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
