@@ -1,0 +1,246 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import {
+  BACKUP_HEADER_BYTES, BACKUP_MAGIC, BACKUP_TAG_BYTES,
+  createBackupCipher, createBackupDecipher, deriveBackupKeys,
+  signBackupManifest, verifyBackupManifestSignature
+} from "./backup-crypto.mjs";
+
+const action = process.argv[2];
+const backupDirectory = path.resolve(process.env.BACKUP_DIRECTORY || "./var/backups");
+const databaseUrl = process.env.DATABASE_URL;
+const masterKey = process.env.BACKUP_ENCRYPTION_KEY;
+const keyId = process.env.BACKUP_ENCRYPTION_KEY_ID;
+
+function required(value, name) {
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+function databaseIdentity(value) {
+  const url = new URL(value);
+  return { host: url.hostname, port: url.port || "5432", database: decodeURIComponent(url.pathname.slice(1)) };
+}
+
+function localHost(host) {
+  return ["localhost", "127.0.0.1", "::1"].includes(host);
+}
+
+function runCommand(command, args, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { env, stdio: ["pipe", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
+    child.once("error", reject);
+    child.once("close", code => code === 0
+      ? resolve()
+      : reject(new Error(`${command} exited with code ${code}: ${stderr.trim()}`)));
+  });
+}
+
+async function hashFile(file) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk);
+  return hash.digest("hex");
+}
+
+async function readBackup(artifactPath, manifestPath) {
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const info = await stat(artifactPath);
+  if (manifest.format !== "onishield-postgres-custom-aes-256-gcm-v1" ||
+      manifest.artifact !== path.basename(artifactPath) ||
+      info.size !== manifest.encrypted_bytes ||
+      info.size < BACKUP_HEADER_BYTES + BACKUP_TAG_BYTES + 1) {
+    throw new Error("Backup manifest or artifact size is invalid");
+  }
+  const keys = deriveBackupKeys(required(masterKey, "BACKUP_ENCRYPTION_KEY"));
+  if (manifest.key_id !== required(keyId, "BACKUP_ENCRYPTION_KEY_ID") ||
+      !verifyBackupManifestSignature(manifest, keys.manifestKey)) {
+    throw new Error("Backup manifest authentication failed or key ID does not match");
+  }
+  if (await hashFile(artifactPath) !== manifest.encrypted_sha256) {
+    throw new Error("Encrypted backup checksum mismatch");
+  }
+  const handle = await open(artifactPath, "r");
+  const header = Buffer.alloc(BACKUP_HEADER_BYTES);
+  const tag = Buffer.alloc(BACKUP_TAG_BYTES);
+  try {
+    await handle.read(header, 0, header.length, 0);
+    await handle.read(tag, 0, tag.length, info.size - tag.length);
+  } finally {
+    await handle.close();
+  }
+  if (!header.subarray(0, BACKUP_MAGIC.length).equals(BACKUP_MAGIC)) {
+    throw new Error("Unknown backup artifact format");
+  }
+  return { manifest, info, iv: header.subarray(BACKUP_MAGIC.length), tag, keys };
+}
+
+function decryptedStream(artifactPath, info, iv, tag, encryptionKey) {
+  const decipher = createBackupDecipher(encryptionKey, iv, tag);
+  const ciphertext = createReadStream(artifactPath, {
+    start: BACKUP_HEADER_BYTES,
+    end: info.size - BACKUP_TAG_BYTES - 1
+  });
+  return { decipher, ciphertext };
+}
+
+async function createBackup() {
+  required(databaseUrl, "DATABASE_URL");
+  required(keyId, "BACKUP_ENCRYPTION_KEY_ID");
+  const keys = deriveBackupKeys(required(masterKey, "BACKUP_ENCRYPTION_KEY"));
+  await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
+  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}`;
+  const artifact = `${id}.pgdump.enc`;
+  const artifactPath = path.join(backupDirectory, artifact);
+  const temporaryPath = `${artifactPath}.partial`;
+  const iv = randomBytes(12);
+  const cipher = createBackupCipher(keys.encryptionKey, iv);
+  const output = createWriteStream(temporaryPath, { mode: 0o600, flags: "wx" });
+  const child = spawn("pg_dump", ["--format=custom", "--no-owner", "--no-acl"], {
+    env: { ...process.env, PGDATABASE: databaseUrl },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
+  const exit = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", code => code === 0 ? resolve() : reject(
+      new Error(`pg_dump exited with code ${code}: ${stderr.trim()}`)
+    ));
+  });
+  try {
+    output.write(Buffer.concat([BACKUP_MAGIC, iv]));
+    await pipeline(child.stdout, cipher, output);
+    await exit;
+    await writeFile(temporaryPath, cipher.getAuthTag(), { flag: "a", mode: 0o600 });
+    await rename(temporaryPath, artifactPath);
+    const encryptedBytes = (await stat(artifactPath)).size;
+    const manifest = signBackupManifest({
+      version: 1,
+      backup_id: id,
+      created_at: new Date().toISOString(),
+      format: "onishield-postgres-custom-aes-256-gcm-v1",
+      artifact,
+      encrypted_bytes: encryptedBytes,
+      encrypted_sha256: await hashFile(artifactPath),
+      key_id: keyId,
+      source: databaseIdentity(databaseUrl),
+      scope: "single PostgreSQL database; global roles and cluster-wide objects are excluded",
+      pg_dump_version: (await commandOutput("pg_dump", ["--version"])).trim()
+    }, keys.manifestKey);
+    const manifestPath = path.join(backupDirectory, `${id}.manifest.json`);
+    const manifestTemporary = `${manifestPath}.partial`;
+    await writeFile(manifestTemporary, JSON.stringify(manifest, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    await rename(manifestTemporary, manifestPath);
+    process.stdout.write(`Backup created: ${artifact}\nManifest: ${path.basename(manifestPath)}\n`);
+  } catch (error) {
+    child.kill("SIGTERM");
+    await rm(temporaryPath, { force: true });
+    await rm(artifactPath, { force: true });
+    throw error;
+  }
+}
+
+function commandOutput(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", code => code === 0 ? resolve(stdout) : reject(new Error(stderr)));
+  });
+}
+
+async function verifyBackup() {
+  const artifactPath = path.resolve(required(process.env.BACKUP_ARTIFACT, "BACKUP_ARTIFACT"));
+  const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
+  const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
+  const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
+  const child = spawn("pg_restore", ["--list"], { stdio: ["pipe", "ignore", "pipe"] });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
+  const exit = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", code => code === 0 ? resolve() : reject(new Error(
+      `pg_restore archive validation failed: ${stderr.trim()}`
+    )));
+  });
+  await pipeline(ciphertext, decipher, child.stdin);
+  await exit;
+  process.stdout.write(`Backup integrity and PostgreSQL archive validation passed: ${manifest.backup_id}\n`);
+}
+
+async function restoreBackup() {
+  const artifactPath = path.resolve(required(process.env.BACKUP_ARTIFACT, "BACKUP_ARTIFACT"));
+  const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
+  const targetUrl = required(process.env.RESTORE_TARGET_DATABASE_URL, "RESTORE_TARGET_DATABASE_URL");
+  if (process.env.RESTORE_CONFIRMATION !== "RESTORE_TO_ISOLATED_DATABASE") {
+    throw new Error("Set RESTORE_CONFIRMATION=RESTORE_TO_ISOLATED_DATABASE to authorize an isolated restore");
+  }
+  const target = databaseIdentity(targetUrl);
+  if (!localHost(target.host) && process.env.RESTORE_ALLOW_REMOTE_TARGET !== "YES_I_UNDERSTAND") {
+    throw new Error("Restore target must be loopback unless RESTORE_ALLOW_REMOTE_TARGET=YES_I_UNDERSTAND is explicitly set");
+  }
+  const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
+  if (JSON.stringify(target) === JSON.stringify(manifest.source)) {
+    throw new Error("Refusing to restore over the source database");
+  }
+  await runCommand("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-Atqc",
+    "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')"],
+  { ...process.env, PGDATABASE: targetUrl });
+  const tableCount = await queryScalar(targetUrl,
+    "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')");
+  if (Number(tableCount) !== 0) throw new Error("Restore target is not empty; no objects were changed");
+  const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
+  const child = spawn("pg_restore", [
+    "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
+  ], { env: { ...process.env, PGDATABASE: targetUrl }, stdio: ["pipe", "ignore", "pipe"] });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
+  const exit = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", code => code === 0 ? resolve() : reject(new Error(
+      `pg_restore failed: ${stderr.trim()}`
+    )));
+  });
+  await pipeline(ciphertext, decipher, child.stdin);
+  await exit;
+  process.stdout.write(`Restore completed into isolated database ${target.database}. Run application and tenant-integrity checks before any cutover.\n`);
+}
+
+async function queryScalar(url, sql) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-Atqc", sql], {
+      env: { ...process.env, PGDATABASE: url }, stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "", stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", code => code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr.trim())));
+  });
+}
+
+try {
+  if (action === "create") await createBackup();
+  else if (action === "verify") await verifyBackup();
+  else if (action === "restore") await restoreBackup();
+  else throw new Error("Usage: node scripts/backup-postgres.mjs <create|verify|restore>");
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "Backup operation failed");
+  process.exitCode = 1;
+}
