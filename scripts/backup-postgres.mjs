@@ -219,7 +219,37 @@ async function restoreBackup() {
     )));
   });
   await Promise.all([pipeline(ciphertext, decipher, child.stdin), exit]);
-  process.stdout.write(`Restore completed into isolated database ${target.database}. Run application and tenant-integrity checks before any cutover.\n`);
+  await invalidateRestoredAuthenticationState(targetUrl);
+  process.stdout.write(`Restore completed into isolated database ${target.database}; restored sessions and one-time authentication material were invalidated. Run application and tenant-integrity checks before any cutover.\\n`);
+}
+
+async function invalidateRestoredAuthenticationState(targetUrl) {
+  const sql = `
+    DO $restore_security$
+    BEGIN
+      IF to_regclass('onishield.operator_sessions') IS NOT NULL THEN
+        EXECUTE 'UPDATE onishield.operator_sessions SET revoked_at=COALESCE(revoked_at,NOW()) WHERE revoked_at IS NULL';
+      END IF;
+      IF to_regclass('onishield.operator_login_challenges') IS NOT NULL THEN
+        EXECUTE 'UPDATE onishield.operator_login_challenges SET consumed_at=COALESCE(consumed_at,NOW()) WHERE consumed_at IS NULL';
+      END IF;
+      IF to_regclass('onishield.operator_email_actions') IS NOT NULL THEN
+        EXECUTE 'UPDATE onishield.operator_email_actions SET consumed_at=COALESCE(consumed_at,NOW()) WHERE consumed_at IS NULL';
+      END IF;
+      IF to_regclass('onishield.operator_mfa_credentials') IS NOT NULL THEN
+        EXECUTE 'UPDATE onishield.operator_mfa_credentials SET pending_ciphertext=NULL,pending_nonce=NULL,pending_tag=NULL,pending_expires_at=NULL WHERE pending_ciphertext IS NOT NULL';
+      END IF;
+      IF to_regclass('onishield.operator_mfa_recovery_codes') IS NOT NULL THEN
+        EXECUTE 'UPDATE onishield.operator_mfa_recovery_codes SET used_at=COALESCE(used_at,NOW()) WHERE used_at IS NULL';
+      END IF;
+    END
+    $restore_security$;
+  `;
+  try {
+    await queryScalar(targetUrl, sql);
+  } catch {
+    throw new Error("Database restore completed, but post-restore authentication invalidation failed. Keep the database isolated and do not start application services.");
+  }
 }
 
 async function queryScalar(url, sql) {
