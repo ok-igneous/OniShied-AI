@@ -298,10 +298,10 @@ app.post<{ Params: { indicatorId: string } }>(
       reply.header("cache-control", "no-store");
       return { review: result };
     } catch (error) {
-      if (error instanceof Error && (error.message === "unauthorized" || /Unauthorized finding transition/.test(error.message))) {
+      if (error instanceof Error && error.message === "unauthorized") {
         return reply.code(401).send({ error: "unauthorized" });
       }
-      if (error instanceof Error && (error.message === "forbidden" || /Forbidden finding transition/.test(error.message))) {
+      if (error instanceof Error && error.message === "forbidden") {
         return reply.code(403).send({ error: "forbidden" });
       }
       if (error instanceof Error && /Step-up authentication required/.test(error.message)) {
@@ -365,10 +365,10 @@ app.post<{ Params: { findingId: string } }>(
       reply.header("cache-control", "no-store");
       return { transition };
     } catch (error) {
-      if (error instanceof Error && error.message === "unauthorized") {
+      if (error instanceof Error && (error.message === "unauthorized" || /Unauthorized finding transition/.test(error.message))) {
         return reply.code(401).send({ error: "unauthorized" });
       }
-      if (error instanceof Error && error.message === "forbidden") {
+      if (error instanceof Error && (error.message === "forbidden" || /Forbidden finding transition/.test(error.message))) {
         return reply.code(403).send({ error: "forbidden" });
       }
       if (error instanceof Error && /Step-up authentication required/.test(error.message)) {
