@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import { registerInvestigationRoutes } from "./investigation-routes.js";
 import { registerOperatorInvestigationConsole } from "./operator-console.js";
 import { hashOperatorSessionToken } from "./operator-auth-crypto.js";
+import { registerEndpointEnrollmentRoutes } from "./endpoint-enrollment-routes.js";
 
 function operatorBearer(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
@@ -25,8 +26,10 @@ function connectorAuthorized(header: string | undefined): boolean {
 export function registerDetectionFindingRoutes(
   app: FastifyInstance,
   operatorAuth: OperatorAuthService | null,
-  authDatabase: Pick<Pool, "query"> | null
+  authDatabase: Pick<Pool, "query"> | null,
+  applicationDatabase: Pick<Pool, "query"> | null
 ): void {
+  registerEndpointEnrollmentRoutes(app, operatorAuth, authDatabase, applicationDatabase);
   registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get("/v1/operator/findings", async (request, reply) => {
