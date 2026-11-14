@@ -166,6 +166,24 @@ BEGIN
       IF NOT FOUND OR existing_id <> event_id_value OR existing_event <> item THEN
         RAISE EXCEPTION 'Endpoint sequence replay conflict';
       END IF;
+      INSERT INTO onishield.detection_replay_jobs(tenant_id,connector_id,event_id)
+      VALUES (trusted.tenant_id,connector_identity,event_id_value::TEXT)
+      ON CONFLICT (tenant_id,connector_id,event_id) DO UPDATE
+        SET status='pending',attempts=0,available_at=NOW(),lease_until=NULL,
+            lease_token=NULL,last_error=NULL,updated_at=NOW()
+        WHERE onishield.detection_replay_jobs.status='dead_letter';
+      SELECT e.event_json INTO normalized_event
+        FROM onishield.security_events e
+       WHERE e.tenant_id=trusted.tenant_id
+         AND e.connector_id=connector_identity AND e.event_id=event_id_value::TEXT;
+      IF FOUND AND EXISTS (
+        SELECT 1 FROM onishield.detection_replay_jobs j
+         WHERE j.tenant_id=trusted.tenant_id
+           AND j.connector_id=connector_identity
+           AND j.event_id=event_id_value::TEXT AND j.status='pending'
+      ) THEN
+        normalized_events := normalized_events || jsonb_build_array(normalized_event);
+      END IF;
       duplicates := duplicates + 1;
     END IF;
   END LOOP;
