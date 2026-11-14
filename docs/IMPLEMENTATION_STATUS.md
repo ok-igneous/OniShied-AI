@@ -15,9 +15,10 @@ The following work exists on an open PR stack based on `main`; it is not yet par
 - PR #26: early operator investigation console at `/operator`, using an existing operator session token; includes case creation, case review, finding association, notes, lifecycle transitions, and AI report review.
 - PR #27: operator-authenticated tenant-scoped finding discovery and selection, so analysts can search indexed title prefixes or exact finding IDs when creating cases.
 - PR #28 branch: deterministic server-side enforcement of AI report limitations when evidence is truncated or threat-intelligence matches are withheld/omitted, with regression tests.
-- Endpoint telemetry contract branch: strict Zod schemas and tests for six Windows/Linux metadata event kinds, pseudonymous identity references, bounded batches, and duplicate sequence rejection. This is schema-only; there is no agent or authenticated endpoint ingestion yet.
+- PR #29 branch: strict Zod schemas and tests for six Windows/Linux metadata event kinds, pseudonymous identity references, bounded batches, and duplicate sequence rejection. Schema-only; no agent or telemetry ingestion.
+- Endpoint enrollment branch: operator-issued 15-minute, tenant-bound one-time enrollment tokens; atomic single-use device claim; server-generated 256-bit device credential stored as a SHA-256 verifier; owner/admin revocation protected by recent step-up authentication. This is enrollment control-plane work only; the credential is not yet accepted by telemetry ingestion.
 
-PRs #21–27 are open and must be merged in dependency order. Migrations 016–021 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
+PRs #21–27 are open and must be merged in dependency order. Migrations 016–022 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
 
 
 ## Implemented in the repository
