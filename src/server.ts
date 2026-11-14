@@ -316,6 +316,50 @@ app.post<{ Params: { indicatorId: string } }>(
   }
 );
 
+app.post<{ Params: { findingId: string } }>(
+  "/v1/operator/findings/:findingId/transition",
+  async (request, reply) => {
+    if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+    const token = operatorBearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const parsed = z.object({
+      status: z.enum(["acknowledged", "investigating", "resolved", "reopened", "suppressed"]),
+      reason: z.string().trim().min(10).max(1000)
+    }).strict().safeParse(request.body);
+    if (!/^[a-f0-9]{64}$/.test(request.params.findingId) || !parsed.success) {
+      return reply.code(400).send({ error: "invalid_finding_transition_request" });
+    }
+    try {
+      const transition = await operatorAuth.transitionDetectionFinding(
+        token, request.params.findingId, parsed.data.status, parsed.data.reason, request.id
+      );
+      reply.header("cache-control", "no-store");
+      return { transition };
+    } catch (error) {
+      if (error instanceof Error && error.message === "unauthorized") {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (error instanceof Error && error.message === "forbidden") {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      if (error instanceof Error && /Step-up authentication required/.test(error.message)) {
+        return reply.code(428).send({ error: "step_up_required" });
+      }
+      if (error instanceof Error && /Detection finding not found/.test(error.message)) {
+        return reply.code(404).send({ error: "finding_not_found" });
+      }
+      if (error instanceof Error && /Invalid finding status transition/.test(error.message)) {
+        return reply.code(409).send({ error: "invalid_finding_status_transition" });
+      }
+      if (error instanceof Error && /Invalid finding transition request/.test(error.message)) {
+        return reply.code(400).send({ error: "invalid_finding_transition_request" });
+      }
+      request.log.error({ err: error }, "Detection finding transition failed");
+      return reply.code(503).send({ error: "finding_transition_unavailable" });
+    }
+  }
+);
+
 app.get("/v1/findings", async (request, reply) => {
   if (!authorizedBearer(request.headers.authorization)) {
     return reply.code(401).send({ error: "unauthorized" });
