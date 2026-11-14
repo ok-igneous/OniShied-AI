@@ -43,7 +43,8 @@ BEGIN
       AND jsonb_array_length(payload->'capabilities')<=5
       AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(payload->'capabilities') AS capability(value)
-        WHERE capability.value #>> '{}' NOT IN
+        WHERE jsonb_typeof(capability.value) IS DISTINCT FROM 'string'
+          OR capability.value #>> '{}' NOT IN
           ('process_start','authentication','network_connection','file_integrity','service_change')
       )
       AND jsonb_typeof(payload->'clock_skew_ms')='number'
