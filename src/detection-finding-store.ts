@@ -83,7 +83,12 @@ async function insertFindings(
              ) AS conditions(item)
            ) AS merged
          ),
-         explanation = EXCLUDED.explanation,
+         explanation = CASE
+           WHEN jsonb_array_length(EXCLUDED.evidence_event_refs) >=
+                jsonb_array_length(current_finding.evidence_event_refs)
+             THEN EXCLUDED.explanation
+           ELSE current_finding.explanation
+         END,
          title = EXCLUDED.title,
          updated_at = NOW()
        RETURNING (xmax = 0) AS inserted`,
