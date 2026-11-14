@@ -45,7 +45,7 @@ A checked-in test file does not prove that the test passes. A migration file doe
 | Invitation, email verification and password reset backend | **Partial** | `src/operator-account-lifecycle.ts`, `src/email-delivery.ts`, account routes and migration 012 exist. Frontend token pages, live Resend configuration/delivery, remote client lifecycle and deployment hardening remain outstanding. |
 | Operator web/desktop/mobile interface | **Missing** | Inspected tree contains backend TypeScript, SQL, docs and scripts; no frontend application or mobile client was found. |
 | Threat-indicator normalization and exact matching | **Implemented in code — unverified** | `src/threat-intelligence.ts` and unit tests support explicit field mappings and bounded exact matching. |
-| Threat-intelligence persistence and match service | **Partial — implemented in code, unverified** | `src/threat-intelligence-service.ts`, migrations 003–004 and database tests exist. It is an internal callable service, not an end-to-end alert pipeline. Its match table currently keys records by `(tenant_id, event_id, indicator...)`, while canonical event identity includes `connector_id`; same event IDs from different connectors can collide. Correct connector-scoped match identity before using these matches to enrich findings. |
+| Threat-intelligence persistence and match service | **Partial — implemented in code, unverified** | `src/threat-intelligence-service.ts`, migrations 003–004 and 014, and database tests exist. Match records now carry connector ID, use a composite foreign key to the canonical event identity, and have connector-scoped replay uniqueness. This remains an internal callable service, not an end-to-end alert pipeline. Migration 014 deliberately aborts if historical match rows cannot be mapped to exactly one event. |
 | Indicator review and audit controls | **Implemented in code — unverified** | Reviewer controls, status transition audit, authz paths and smoke tests exist. |
 | TLP disclosure enforcement | **Partial** | A fail-closed policy evaluator and tests exist, but authenticated read/report/export endpoints and recipient membership enforcement are not wired to it. |
 | Automatic threat-feed ingestion / TAXII-STIX | **Missing** | Contracts explicitly defer automatic feeds and external feed integrations. |
@@ -82,7 +82,7 @@ Two authentication rules now exist: eight failures within five minutes for the s
 
 ### 3.3 Threat intelligence is not detection
 
-The matcher compares explicitly mapped event fields with active indicators. It does not establish malicious behavior by itself. The service is not wired into ingestion or a finding pipeline. Before enrichment, fix a data-model mismatch: `security_events` identifies an event by tenant + connector + event ID, but `threat_indicator_matches` and its service uniqueness/readback currently omit connector ID. Two connectors using the same event ID inside one tenant can therefore collide or share match records. Add connector-scoped match identity and migration/integration coverage first. An indicator match must never authorize a response.
+The matcher compares explicitly mapped event fields with active indicators. It does not establish malicious behavior by itself. The service is not wired into ingestion or a finding pipeline. That identity mismatch is now corrected in source and migration 014: connector ID is carried through the matcher, service insert/readback, uniqueness key, and composite foreign key. The PostgreSQL smoke test now seeds two connectors with the same event ID and asserts that they retain separate match rows while replay within one connector remains idempotent. These changes are committed but unexecuted; migration, RLS and SQL behavior remain unverified until CI runs. An indicator match must never authorize a response.
 
 ### 3.4 Authentication is not a finished operator product
 
@@ -142,8 +142,8 @@ The following order minimizes the risk of building autonomy on top of an unverif
 - [ ] Restore CI execution and fix any real type, test, migration or build failures.
 - [ ] Add PostgreSQL integration tests for event-to-finding persistence and tenant isolation.
 - [ ] Add durable replay for late events outside the bounded request horizon, alert delivery, finding lifecycle/merging, and benign-event calibration.
-- [ ] Fix threat-indicator match identity to include connector ID (migration, service, uniqueness constraints and regression tests).
-- [ ] Then wire threat-indicator matches into finding enrichment without treating matches as proof or response authorization.
+- [x] Fix threat-indicator match identity to include connector ID (migration, service, uniqueness constraints and regression tests authored; execution pending).
+- [ ] Wire threat-indicator matches into finding enrichment without treating matches as proof or response authorization.
 
 ### P2 — Read-only investigation
 
