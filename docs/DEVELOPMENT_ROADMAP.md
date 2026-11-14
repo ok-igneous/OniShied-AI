@@ -12,23 +12,23 @@ This roadmap is staged. Each phase has a measurable exit gate; do not move forwa
 **Exit gate:** scope, ownership, threat boundaries, and test environment are agreed.
 
 ## Phase 1 — Event pipeline
-- [ ] Define versioned canonical security event schema.
-- [ ] Build synthetic event generator/replay fixture.
-- [ ] Implement authenticated ingestion and validation.
-- [ ] Normalize events and preserve provenance.
-- [ ] Add unit and integration tests.
+- [x] Define versioned canonical security event schema (authored).
+- [x] Build synthetic event generator/replay fixture (authored).
+- [x] Implement authenticated ingestion and validation (authored on unmerged PR branches; DB validation and per-agent event-rate budget added in follow-up).
+- [x] Normalize events and preserve provenance (authored).
+- [x] Add schema, route and PostgreSQL smoke tests (authored; not executed).
 
-**Exit gate:** repeatable ingestion of valid events and safe rejection of invalid events.
+**Exit gate:** NOT PASSED. All implementation and test artifacts remain unmerged/unverified. Require PostgreSQL 16 migrations 001–024, all SQL smoke tests, Fastify route tests, full unit tests, typecheck, build and concurrency testing to pass.
 
 ## Phase 2 — Detection and triage
 
-Design artefacts: [initial detection scenario catalogue](DETECTION_SCENARIOS.md). This is a specification, not an implemented detector.
-- [ ] Implement a small deterministic detection rule set.
-- [ ] Link findings to source event identifiers.
-- [ ] Add severity rubric and confidence semantics.
-- [ ] Test benign events and false positives.
+Design artefacts: [initial detection scenario catalogue](DETECTION_SCENARIOS.md). The first two authentication rules and evidence-linked finding persistence are authored in unmerged branches; endpoint process/network/file/service detections remain absent.
+- [x] Implement initial authentication burst and failure-then-success rules (unverified).
+- [x] Link findings to source event identifiers (unverified).
+- [x] Add initial severity and confidence semantics (unverified).
+- [ ] Add benign counterexamples and false-positive regression coverage for every rule.
 
-**Exit gate:** deterministic findings with explainable evidence.
+**Exit gate:** NOT PASSED. Detection logic requires successful tests, PostgreSQL persistence/replay verification, and benign/false-positive evaluation. Do not describe endpoint telemetry categories without rules as detected.
 
 ## Phase 3 — AI investigation
 
