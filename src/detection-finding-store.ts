@@ -9,12 +9,41 @@ async function insertFindings(
   client: PoolClient,
   tenantId: string,
   findings: readonly DetectionFinding[]
-): Promise<number> {
+): Promise<{ insertedCount: number; findings: DetectionFinding[] }> {
   let insertedCount = 0;
+  const persistedFindings: DetectionFinding[] = [];
   for (const finding of findings) {
     if (finding.tenant_id !== tenantId) {
       throw new Error("Finding tenant does not match transaction tenant");
     }
+    // Migration 016 preserves legacy finding IDs and backfills their first
+    // evidence reference as the legacy anchor. Reuse that row when its anchor
+    // is present in this episode's evidence, rather than creating a duplicate
+    // stable-identity row during the first post-upgrade evaluation.
+    const legacy = await client.query<{ finding_id: string }>(
+      `SELECT f.finding_id
+         FROM onishield.detection_findings AS f
+        WHERE f.tenant_id = $1
+          AND f.finding_id <> $2
+          AND f.rule_id = $3
+          AND f.rule_version = $4
+          AND f.grouping_key_hash = $5
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_to_recordset($6::jsonb) AS incoming(connector_id TEXT, event_id TEXT)
+             WHERE incoming.connector_id = f.episode_anchor_connector_id
+               AND incoming.event_id = f.episode_anchor_event_id
+          )
+        ORDER BY f.created_at ASC, f.finding_id ASC
+        LIMIT 1`,
+      [tenantId, persistedFinding.finding_id, finding.rule_id, finding.rule_version,
+       finding.grouping_key_hash, JSON.stringify(finding.evidence_event_refs)]
+    );
+    const persistedFinding = {
+      ...finding,
+      finding_id: legacy.rows[0]?.finding_id ?? finding.finding_id
+    };
+    persistedFindings.push(persistedFinding);
     const result = await client.query<{ inserted: boolean }>(
       `INSERT INTO onishield.detection_findings AS current_finding
         (tenant_id, finding_id, rule_id, rule_version, status, title,
@@ -54,6 +83,8 @@ async function insertFindings(
              ) AS conditions(item)
            ) AS merged
          ),
+         explanation = EXCLUDED.explanation,
+         title = EXCLUDED.title,
          updated_at = NOW()
        RETURNING (xmax = 0) AS inserted`,
       [
@@ -76,11 +107,11 @@ async function insertFindings(
           (tenant_id, finding_id, connector_id, event_id)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (tenant_id, finding_id, connector_id, event_id) DO NOTHING`,
-        [tenantId, finding.finding_id, evidence.connector_id, evidence.event_id]
+        [tenantId, persistedFinding.finding_id, evidence.connector_id, evidence.event_id]
       );
     }
   }
-  return insertedCount;
+  return { insertedCount, findings: persistedFindings };
 }
 
 async function persistFindingThreatMatches(
@@ -142,8 +173,8 @@ export async function persistDetectionFindings(
   tenantId: string,
   findings: readonly DetectionFinding[]
 ): Promise<number> {
-  return withTenantTransaction(tenantId, (client) =>
-    insertFindings(client, tenantId, findings)
+  return withTenantTransaction(tenantId, async (client) =>
+    (await insertFindings(client, tenantId, findings)).insertedCount
   );
 }
 
@@ -199,9 +230,9 @@ export async function evaluateAndPersistAroundEvent(
     }
 
     const findings = evaluateDetections(events);
-    const insertedCount = await insertFindings(client, tenantId, findings);
-    await persistFindingThreatMatches(client, tenantId, findings, events);
-    return insertedCount;
+    const persisted = await insertFindings(client, tenantId, findings);
+    await persistFindingThreatMatches(client, tenantId, persisted.findings, events);
+    return persisted.insertedCount;
   });
 }
 
