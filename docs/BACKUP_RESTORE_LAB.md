@@ -69,7 +69,8 @@ The restore target must have required PostgreSQL roles and extensions provisione
 
 ## Operational limits and next gates
 
-- Schedule this command externally only after the operator has selected a cadence and tested runtime/cost; this PR does not add a scheduler.
+- `npm run backup:run` now orchestrates backup creation, local verification, and (when `S3_BUCKET` is configured) immutable-vault upload. It writes a secret-free `backup-status.json` and uses an exclusive lock to prevent overlapping runs. A stale lock is intentionally not auto-cleared: an operator must inspect the host/process before removing it.
+- This is a scheduler-ready runner, not a scheduler service. Configure cron or the hosting platform's scheduled-job facility only after selecting a cadence and validating runtime/cost. Example cron entry (load the protected environment file; keep it owner-readable only): `0 2 * * * cd /opt/onishield && set -a && . /etc/onishield/backup.env && set +a && /usr/bin/node scripts/backup-runner.mjs >> /var/log/onishield-backup.log 2>&1`. Ensure the runtime identity can read the secrets file and write the backup directory, but cannot delete immutable remote versions.
 - Copy artifacts to a separate account/project or immutable object-lock vault using a dedicated backup identity. Never let the production application identity delete backup history.
 - Add retention only after legal, customer and storage-cost requirements are decided.
 - Add WAL archiving/PITR only after selecting and testing the actual PostgreSQL hosting model.
@@ -122,6 +123,28 @@ node scripts/backup-s3.mjs download
 ```
 
 The downloader fetches the exact version IDs returned by the bucket, checks object identity and COMPLIANCE retention metadata, verifies downloaded bytes against remote SHA-256 metadata and the authenticated manifest, then runs the full local archive verifier. A successful download is still not a restore drill; use the isolated PostgreSQL restore procedure above afterward.
+
+
+## Scheduled backup runner
+
+The runner is deliberately separate from the API process. Do not start a timer inside each Fastify worker: multiple application replicas could create duplicate schedules and make backups dependent on API uptime. Use exactly one dedicated host scheduler or managed scheduled-job instance.
+
+Configure these environment variables in the scheduler's protected secret/environment facility:
+- All local backup variables: `DATABASE_URL`, `BACKUP_ENCRYPTION_KEY`, `BACKUP_ENCRYPTION_KEY_ID`, and `BACKUP_DIRECTORY`.
+- For mandatory off-site protection, set `S3_BUCKET`, `S3_REGION`, provider endpoint settings if required, and the AWS SDK workload identity/credentials.
+- Set `BACKUP_UPLOAD_REQUIRED=true` so a missing `S3_BUCKET` causes the run to fail rather than silently accepting a local-only copy.
+
+Run:
+
+```sh
+npm run backup:run
+```
+
+The runner executes create → local verify → optional S3 upload. It writes `backup-status.json` atomically with run ID, timestamps, backup ID, artifact/manifest names, local verification result, remote-upload state and a non-secret failure summary. It does not record connection URLs, encryption keys, or cloud credentials. Exit code is non-zero if any required stage fails. A local backup that verifies but fails mandatory upload is recorded as a failed overall run.
+
+The exclusive lock prevents concurrent invocations. If the host crashes or the process is killed, the lock directory may remain. The runner refuses to remove it automatically because doing so could permit overlapping backups while an earlier process is still active. Inspect the process and host first; only then may an operator remove a stale lock.
+
+The runner does not configure a schedule, send alerts, or delete old backups. The scheduler must alert on non-zero exit, stale `backup-status.json`, and missing expected run windows. Do not implement local retention deletion until off-site recovery, legal holds, and minimum-copy policy are tested.
 
 ## CLI actions
 
