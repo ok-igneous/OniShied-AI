@@ -63,9 +63,13 @@ async function headAndVerify(client, bucket, key, expected, retentionDate) {
   return { version_id: head.VersionId, size: head.ContentLength, retain_until: head.ObjectLockRetainUntilDate };
 }
 
-async function downloadLockedObject(client, bucket, key, destination, expected, kind, backupId) {
-  const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-  if (!head.VersionId || head.Metadata?.backup_id !== backupId ||
+async function downloadLockedObject(client, bucket, key, destination, expected, kind, backupId, expectedVersionId) {
+  const head = await client.send(new HeadObjectCommand({
+    Bucket: bucket, Key: key,
+    ...(expectedVersionId ? { VersionId: expectedVersionId } : {})
+  }));
+  if (!head.VersionId || (expectedVersionId && head.VersionId !== expectedVersionId) ||
+      head.Metadata?.backup_id !== backupId ||
       head.Metadata?.object_kind !== kind || head.ObjectLockMode !== "COMPLIANCE" ||
       !head.ObjectLockRetainUntilDate ||
       new Date(head.ObjectLockRetainUntilDate).getTime() <= Date.now() ||
@@ -106,7 +110,8 @@ async function downloadBackup(client, bucket, baseKey, backupId) {
   let artifactDownloaded = false;
   try {
     const manifestObject = await downloadLockedObject(
-      client, bucket, manifestKey, manifestPath, null, "authenticated-backup-manifest", backupId
+      client, bucket, manifestKey, manifestPath, null, "authenticated-backup-manifest", backupId,
+      process.env.S3_MANIFEST_VERSION_ID
     );
     manifestDownloaded = true;
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -119,7 +124,8 @@ async function downloadBackup(client, bucket, baseKey, backupId) {
     const artifactKey = `${baseKey}/${manifest.artifact}`;
     const artifactObject = await downloadLockedObject(
       client, bucket, artifactKey, artifactPath,
-      { sha256: manifest.encrypted_sha256 }, "encrypted-postgresql-artifact", backupId
+      { sha256: manifest.encrypted_sha256 }, "encrypted-postgresql-artifact", backupId,
+      process.env.S3_ARTIFACT_VERSION_ID
     );
     artifactDownloaded = true;
     await runLocalVerification(artifactPath, manifestPath);
