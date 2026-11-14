@@ -185,24 +185,24 @@ BEGIN
         ),'[]'::jsonb),
         'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
-            'indicator_type',ti.indicator_type,'indicator_value',ti.value_normalized,
-            'indicator_confidence',ti.confidence,'tlp',ti.tlp,
-            'indicator_status',ti.status,'indicator_version',ti.version,
-            'source_name',src.display_name,'source_kind',src.source_kind,
+            'indicator_type',tm.indicator_type,'indicator_value',tm.value_normalized,
+            'indicator_confidence',tm.confidence,'tlp',tm.tlp,
+            'indicator_status',tm.status,'indicator_version',tm.version,
+            'source_name',tm.display_name,'source_kind',tm.source_kind,
             'matcher_version',tm.matcher_version,'matched_field_path',tm.matched_field_path,
-            'matched_at',tm.matched_at,'valid_from',ti.valid_from,'expires_at',ti.expires_at
+            'matched_at',tm.matched_at,'valid_from',tm.valid_from,'expires_at',tm.expires_at
           ) ORDER BY tm.matched_at DESC)
           FROM (
-            SELECT ti.indicator_type,ti.value_normalized,ti.confidence,ti.tlp,
-              ti.status,ti.version,src.display_name,src.source_kind,
-              tm.matcher_version,tm.matched_field_path,tm.matched_at,ti.valid_from,ti.expires_at
+            SELECT tm.indicator_type,tm.value_normalized,tm.confidence,tm.tlp,
+              tm.status,tm.version,tm.display_name,tm.source_kind,
+              tm.matcher_version,tm.matched_field_path,tm.matched_at,tm.valid_from,tm.expires_at
             FROM onishield.detection_finding_threat_matches ftm
             JOIN onishield.threat_indicator_matches tm
               ON tm.tenant_id=ftm.tenant_id AND tm.id=ftm.threat_match_id
              AND tm.connector_id=ftm.connector_id AND tm.event_id=ftm.event_id
             JOIN onishield.threat_indicators ti
               ON ti.tenant_id=tm.tenant_id AND ti.id=tm.indicator_id
-             AND ti.version=tm.indicator_version
+             AND tm.version=tm.indicator_version
             JOIN onishield.threat_intelligence_sources src
               ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
             WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
