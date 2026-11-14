@@ -81,6 +81,10 @@ export function registerEndpointTelemetryRoutes(
       if(error instanceof Error && /Endpoint sequence replay conflict|Endpoint canonical event identity conflict/.test(error.message)) {
         return reply.code(409).send({error:"endpoint_sequence_conflict"});
       }
+      if(error instanceof Error && /Endpoint telemetry rate limit exceeded/.test(error.message)) {
+        reply.header("retry-after","60");
+        return reply.code(429).send({error:"endpoint_telemetry_rate_limited"});
+      }
       request.log.error({err:error},"Endpoint telemetry ingestion failed");
       return reply.code(503).send({error:"endpoint_telemetry_unavailable"});
     }
