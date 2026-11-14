@@ -130,6 +130,23 @@ test("matches only explicitly mapped event fields using exact normalized values"
   );
 });
 
+test("matches IP indicators against authentication source_address", () => {
+  const matches = matchThreatIndicators({
+    connectorId: "connector-auth",
+    eventId: "auth-failure-1",
+    data: { source_address: "192.0.2.44" },
+    indicators: [indicator({
+      type: "ipv4",
+      value_normalized: "192.0.2.44"
+    })],
+    now
+  });
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]?.matched_field_path, "data.source_address");
+  assert.equal(matches[0]?.connector_id, "connector-auth");
+});
+
 test("does not match pending, expired, revoked, rejected, future, or expired-by-time indicators", () => {
   const states: ThreatIndicator[] = [
     indicator({ status: "pending", id: "pending" }),
