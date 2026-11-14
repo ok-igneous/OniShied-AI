@@ -74,6 +74,19 @@ BEGIN
   connector_identity := 'endpoint:' || trusted.id::TEXT;
 
   FOR item IN SELECT value FROM jsonb_array_elements(p_events) LOOP
+    IF jsonb_typeof(item) IS DISTINCT FROM 'object'
+       OR jsonb_typeof(item->'data') IS DISTINCT FROM 'object'
+       OR item->>'agent_id' IS NULL
+       OR item->>'boot_id' IS NULL
+       OR item->>'event_id' IS NULL
+       OR item->>'sequence' IS NULL
+       OR item->>'platform' IS NULL
+       OR item->>'agent_version' IS NULL
+       OR item->>'kind' IS NULL
+       OR item->>'observed_at' IS NULL
+       OR item->>'collected_at' IS NULL THEN
+      RAISE EXCEPTION 'Invalid endpoint event shape';
+    END IF;
     BEGIN
       event_agent := (item->>'agent_id')::UUID;
       event_boot := (item->>'boot_id')::UUID;
@@ -82,7 +95,7 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
       RAISE EXCEPTION 'Invalid endpoint event identity';
     END;
-    IF event_agent <> trusted.id OR item->>'platform' <> trusted.platform
+    IF event_agent IS DISTINCT FROM trusted.id OR item->>'platform' IS DISTINCT FROM trusted.platform
        OR item->>'agent_version' IS DISTINCT FROM trusted.agent_version
        OR event_sequence <= 0
        OR item->>'kind' NOT IN (
