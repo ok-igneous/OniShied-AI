@@ -32,7 +32,7 @@ export BACKUP_DIRECTORY='/secure/backups/onishield'
 node scripts/backup-postgres.mjs create
 ```
 
-The command streams PostgreSQL custom-format output through AES-256-GCM encryption. It writes a restricted-permission `.pgdump.enc` artifact and a JSON sidecar manifest containing the source database identity, artifact size, SHA-256 digest, creation time, tool version and key ID. The manifest is HMAC-authenticated using a separately derived key. Plaintext dump files are not written to disk.
+The command streams PostgreSQL custom-format output through AES-256-GCM encryption. It writes a restricted-permission `.pgdump.enc` artifact and a JSON sidecar manifest containing the source database identity, PostgreSQL server/tool versions, artifact size, SHA-256 digest, creation time and key ID. The manifest is HMAC-authenticated using a separately derived key. Plaintext dump files are not written to disk.
 
 A completed command means the encrypted artifact and manifest were written. It does not mean the backup is off-site, immutable, or restorable until verification and a restore drill pass.
 
