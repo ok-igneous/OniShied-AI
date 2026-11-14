@@ -14,10 +14,24 @@
   - GET /v1/operator/investigations/:caseId
   - POST /v1/operator/investigations/:caseId/findings
   - POST /v1/operator/investigations/:caseId/notes
+  - POST /v1/operator/investigations/:caseId/analyze
+  - GET /v1/operator/investigations/:caseId/analysis-status
+  - GET /v1/operator/investigations/:caseId/reports
 - Case detail returns associated findings, exact structured event evidence references, and activity timeline.
 - Case priority is initialized from the highest severity among selected findings.
 - Duplicate finding association requests are idempotent; unique constraints protect concurrent duplicate writes.
 - Viewers can read investigation cases; only owner, admin, and security analyst can create cases, associate findings, or add notes. Mutations require recent step-up.
+
+## AI analysis pipeline (migration 020)
+
+- Durable tenant-scoped analysis jobs with lease tokens, expiry recovery, bounded retries, and dead-letter state.
+- Analysis requests require an authenticated owner/admin/security_analyst session and a recent five-minute step-up. Requests are deduplicated per active case, limited to one per case every ten minutes, and capped at 30 per tenant per hour.
+- The separate worker uses the OpenAI Responses API with strict JSON Schema output. Configure OPENAI_API_KEY and OPENAI_MODEL; neither setting is required for the API server to start.
+- The worker receives bounded case/finding metadata, canonical event references and timestamps, and TLP:CLEAR threat-intelligence provenance only. TLP:GREEN, TLP:AMBER, and TLP:RED matches are withheld from the external provider and counted in the report input. Raw event payloads, credentials, and operator notes are not sent.
+- Model output is Zod-validated; every evidence citation must exactly match a canonical connector_id/event_id pair and timeline timestamps must match canonical event timestamps.
+- Reports are versioned and append-only. A database trigger rejects report UPDATE and DELETE. Report metadata records provider, model, template version, and evidence digest.
+- The worker has no tools or response execution path. Recommendations are advisory and every recommendation requires human approval.
+- New routes: POST /v1/operator/investigations/:caseId/analyze and GET /v1/operator/investigations/:caseId/reports. Worker command: npm run start:investigation-worker.
 
 ## Deliberate limitations
 
@@ -26,7 +40,7 @@
 - One finding can belong to only one case in this release, including resolved cases; audited case merge/re-parenting is deferred.
 - Case priority is a snapshot at creation; it is not dynamically recomputed when finding severity changes.
 - Evidence is referenced from canonical finding evidence; event payloads are not copied into investigation records.
-- The SQL smoke test is authored but not executed. Migration 019 has not been applied to a live database. Typecheck, build, unit tests, and CI have not been run.
+- The SQL smoke tests are authored but not executed. Migrations 019 and 020 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run.
 - Concurrent duplicate protection relies on database uniqueness and transaction semantics; a concurrent database stress test remains outstanding.
 
 ## Verification gate

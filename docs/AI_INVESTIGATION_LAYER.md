@@ -1,7 +1,13 @@
 # OniShield AI Investigation Layer
 
 ## Status
-Architecture contract for the first investigation milestone. This document does not claim that an investigation service, database schema, API, AI provider integration, or operator UI has been implemented. Existing capabilities include deterministic findings, tenant-scoped evidence references, threat-intelligence match links, replay, and operator-controlled finding status transitions.
+Architecture and implementation contract. The repository now contains tenant-scoped investigation cases, operator APIs, durable AI analysis jobs, an OpenAI Responses API worker, evidence-citation validation, and immutable report storage. These changes are authored but remain unverified: migrations, tests, typecheck, build, and CI have not been successfully executed. No operator dashboard or autonomous response authority is implemented.
+
+## Current implementation boundary
+
+The AI worker sends a bounded evidence package to the configured OpenAI API. It includes finding metadata, canonical event IDs/timestamps/types, and linked threat-intelligence provenance. It excludes raw event payloads, credentials, operator notes, and tenant IDs. The request uses the Responses API with strict JSON Schema output and `store: false`. Operators must configure the provider and assess their data-processing obligations before enabling the worker.
+
+The API server does not require an OpenAI key. The separate worker requires both `OPENAI_API_KEY` and `OPENAI_MODEL`. Analysis requests are step-up protected, deduplicated while active, and limited to one request per case per ten minutes. Reports are versioned and immutable. Every model-generated event citation must match the canonical evidence manifest; timeline timestamps must exactly match stored event timestamps.
 
 ## Objective
 Turn related detection findings into an operator-readable investigation case: a durable workspace for understanding an incident, not a new detector and not an autonomous response authority.

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test src/*.test.ts",
     "check:lines": "node scripts/check-source-lines.mjs",
-    "start:replay-worker": "node dist/detection-replay-worker.js"
+    "start:replay-worker": "node dist/detection-replay-worker.js",
+    "start:investigation-worker": "node dist/investigation-analysis-worker.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

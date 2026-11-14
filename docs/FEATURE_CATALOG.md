@@ -1,6 +1,6 @@
 # OniShield AI — Product Feature Catalogue
 
-**Last updated:** 2026-11-13  
+**Last updated:** 2026-11-14  
 **Document type:** Product scope and capability register  
 **Product status:** Early-stage foundation; not production-ready.
 
@@ -37,7 +37,7 @@ No item should be promoted to verified or production-ready without repeatable te
 | Event normalization | Normalize supported source events into a versioned canonical schema | Partial; schema and initial paths exist, end-to-end verification pending |
 | Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Design/roadmap; initial detection engine not implemented |
 | Threat intelligence | Normalize and match indicators, preserve provenance, review indicator status | Partial; internal matching and reviewer controls implemented in code, unverified; not wired into ingestion |
-| AI investigation | Evidence-linked summaries, correlation, uncertainty, investigation recommendations | Contract/design only; investigation service not implemented |
+| AI investigation | Evidence-linked summaries, correlation, uncertainty, investigation recommendations | Backend case store, authenticated routes, leased analysis worker, citation validation and immutable reports authored; unverified; no dashboard or automatic case correlation |
 | Policy and approvals | Server-side authorization, risk evaluation, approvals and action governance | Design documented; complete policy service not implemented |
 | Response execution | Narrow typed actions, idempotency, verification, rollback and audit | Not implemented |
 | Configurable Autopilot | Tenant-controlled, risk-bounded automation with OFF default and emergency pause | Technical contract documented; no policy schema, UI or executor |
@@ -112,7 +112,7 @@ Target capabilities:
 
 **Non-negotiable boundary:** AI is advisory. It cannot grant permissions, alter tenant scope, approve its own recommendations or directly execute arbitrary commands.
 
-**Status:** Contract/design only; no working AI investigation agent is claimed.
+**Status:** First backend slice authored: tenant-scoped cases, operator-triggered OpenAI analysis, strict structured output, evidence-reference validation, retry queue and immutable reports. Migration and code verification remain outstanding; no dashboard, automatic finding correlation, or response execution.
 
 ## 5. Configurable OniShield Autopilot
 

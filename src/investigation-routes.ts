@@ -36,7 +36,7 @@ export function registerInvestigationRoutes(
     const token = bearer(request.headers.authorization);
     const body = z.object({
       title: z.string().trim().min(3).max(160),
-      findingIds: z.array(findingIdSchema).min(1).max(50),
+      findingIds: z.array(findingIdSchema).min(1).max(25),
       reason: z.string().trim().min(10).max(1000)
     }).strict().safeParse(request.body);
     if (!token) return reply.code(401).send({ error: "unauthorized" });
@@ -116,6 +116,60 @@ export function registerInvestigationRoutes(
       return handleError(request, reply, error, "investigation_note_failed");
     }
   });
+  app.post<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/analyze", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "detection:triage");
+      const result = await database.query<{ job_id: string }>(
+        "SELECT onishield.request_investigation_analysis($1,$2::uuid,$3) AS job_id",
+        [hashOperatorSessionToken(token), request.params.caseId, request.id]
+      );
+      reply.header("cache-control", "no-store");
+      return reply.code(202).send({ jobId: result.rows[0]?.job_id, status: "queued" });
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_analysis_request_failed");
+    }
+  });
+
+  app.get<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/analysis-status", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "investigation:read");
+      const result = await database.query<{ status: unknown }>(
+        "SELECT onishield.get_investigation_analysis_status($1,$2::uuid) AS status",
+        [hashOperatorSessionToken(token), request.params.caseId]
+      );
+      reply.header("cache-control", "no-store");
+      return { analysis: result.rows[0]?.status ?? null };
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_analysis_status_unavailable");
+    }
+  });
+
+  app.get<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/reports", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "investigation:read");
+      const result = await database.query<{ reports: unknown }>(
+        "SELECT onishield.list_investigation_analysis_reports($1,$2::uuid) AS reports",
+        [hashOperatorSessionToken(token), request.params.caseId]
+      );
+      reply.header("cache-control", "no-store");
+      return { reports: result.rows[0]?.reports ?? [] };
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_reports_unavailable");
+    }
+  });
+
 }
 
 function bearer(header: string | undefined): string | null {
@@ -140,6 +194,8 @@ function handleError(
   if (/step-up required/.test(message)) return reply.code(428).send({ error: "step_up_required" });
   if (/not found|not exist/.test(message)) return reply.code(404).send({ error: "investigation_resource_not_found" });
   if (/duplicate key|investigation_case_findings_one_case_per_finding_idx/.test(message)) return reply.code(409).send({ error: "finding_already_associated" });
+  if (/finding limit reached|exceeds supported analysis scope/.test(message)) return reply.code(409).send({ error: "investigation_case_scope_limit_reached" });
+  if (/analysis tenant rate limit/.test(message)) return reply.code(429).send({ error: "investigation_analysis_rate_limited" });
   if (/Invalid investigation|Duplicate finding/.test(message)) {
     return reply.code(400).send({ error: "invalid_investigation_request" });
   }

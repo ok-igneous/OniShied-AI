@@ -12,6 +12,8 @@ const configSchema = z.object({
   RESEND_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
   EMAIL_FROM: z.preprocess((value) => value === "" ? undefined : value, z.string().min(3).max(254).optional()),
   APP_PUBLIC_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  OPENAI_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
+  OPENAI_MODEL: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).max(128).optional()),
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
   LAB_CONNECTOR_ID: z.string().min(1).max(128),
   LAB_CONNECTOR_TOKEN: z.string().min(32),
@@ -39,7 +41,7 @@ if (parsed.data.AUTH_DATABASE_URL && !parsed.data.MFA_RECOVERY_PEPPER) {
   throw new Error("MFA_RECOVERY_PEPPER is required when AUTH_DATABASE_URL is configured");
 }
 
-if (Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.EMAIL_FROM) ||
+if (Boolean(parsed.data.OPENAI_API_KEY) !== Boolean(parsed.data.OPENAI_MODEL)) {\n  throw new Error("OPENAI_API_KEY and OPENAI_MODEL must be configured together");\n}\n\nif (Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.EMAIL_FROM) ||
     Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.APP_PUBLIC_URL)) {
   throw new Error("RESEND_API_KEY, EMAIL_FROM, and APP_PUBLIC_URL must be configured together");
 }
@@ -63,7 +65,7 @@ export const config = {
   mfaRecoveryPepper: parsed.data.MFA_RECOVERY_PEPPER,
   resendApiKey: parsed.data.RESEND_API_KEY,
   emailFrom: parsed.data.EMAIL_FROM,
-  publicUrl: parsed.data.APP_PUBLIC_URL,
+  publicUrl: parsed.data.APP_PUBLIC_URL,\n  openAiApiKey: parsed.data.OPENAI_API_KEY,\n  openAiModel: parsed.data.OPENAI_MODEL,
   databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
