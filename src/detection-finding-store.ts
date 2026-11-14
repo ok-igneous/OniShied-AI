@@ -3,6 +3,7 @@ import type { DetectionFinding } from "./detection-engine.js";
 import { evaluateDetections } from "./detection-engine.js";
 import { securityEventSchema, type SecurityEventInput } from "./security-event.js";
 import { withTenantTransaction } from "./database.js";
+import { matchEventsIndicatorsInTransaction } from "./threat-intelligence-service.js";
 
 async function insertFindings(
   client: PoolClient,
@@ -18,22 +19,80 @@ async function insertFindings(
       `INSERT INTO onishield.detection_findings
         (tenant_id, finding_id, rule_id, rule_version, status, title,
          explanation, severity, confidence, first_seen_at, last_seen_at,
-         evidence_event_ids, grouping_key_hash, matched_conditions, known_limitations)
+         evidence_event_ids, evidence_event_refs, grouping_key_hash,
+         matched_conditions, known_limitations)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               $12::jsonb, $13, $14::jsonb, $15::jsonb)
+               $12::jsonb, $13::jsonb, $14, $15::jsonb, $16::jsonb)
        ON CONFLICT (tenant_id, finding_id) DO NOTHING
        RETURNING id`,
       [
         tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
         finding.status, finding.title, finding.explanation, finding.severity,
         finding.confidence, finding.first_seen_at, finding.last_seen_at,
-        JSON.stringify(finding.evidence_event_ids), finding.grouping_key_hash,
-        JSON.stringify(finding.matched_conditions), JSON.stringify(finding.known_limitations)
+        JSON.stringify(finding.evidence_event_ids),
+        JSON.stringify(finding.evidence_event_refs),
+        finding.grouping_key_hash,
+        JSON.stringify(finding.matched_conditions),
+        JSON.stringify(finding.known_limitations)
       ]
     );
     insertedCount += result.rowCount ?? 0;
   }
   return insertedCount;
+}
+
+async function persistFindingThreatMatches(
+  client: PoolClient,
+  tenantId: string,
+  findings: readonly DetectionFinding[],
+  evidenceEvents: readonly SecurityEventInput[]
+): Promise<void> {
+  const referenced = new Set(
+    findings.flatMap((finding) => finding.evidence_event_refs.map((ref) =>
+      JSON.stringify([ref.connector_id, ref.event_id])
+    ))
+  );
+  const selectedEvents = evidenceEvents.filter((event) =>
+    referenced.has(JSON.stringify([event.source.connector_id, event.event_id]))
+  );
+  if (selectedEvents.length === 0) return;
+
+  // Load the tenant's active indicator set once for this evaluation batch.
+  const matches = await matchEventsIndicatorsInTransaction(
+    client,
+    tenantId,
+    selectedEvents
+  );
+  if (matches.length === 0) return;
+
+  const byEvent = new Map<string, typeof matches>();
+  for (const match of matches) {
+    const key = JSON.stringify([match.connector_id, match.event_id]);
+    const current = byEvent.get(key) ?? [];
+    current.push(match);
+    byEvent.set(key, current);
+  }
+
+  for (const finding of findings) {
+    for (const evidence of finding.evidence_event_refs) {
+      const key = JSON.stringify([evidence.connector_id, evidence.event_id]);
+      for (const match of byEvent.get(key) ?? []) {
+        await client.query(
+          `INSERT INTO onishield.detection_finding_threat_matches
+            (tenant_id, finding_id, connector_id, event_id, threat_match_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (tenant_id, finding_id, threat_match_id) DO NOTHING`,
+          [
+            tenantId,
+            finding.finding_id,
+            evidence.connector_id,
+            evidence.event_id,
+            match.match_id
+          ]
+        );
+      }
+    }
+  }
 }
 
 /** Persists supplied findings idempotently inside an explicit tenant scope. */
@@ -48,8 +107,7 @@ export async function persistDetectionFindings(
 
 /**
  * Re-evaluates the bounded +/-10 minute neighborhood of an accepted event.
- * This handles out-of-order delivery within that horizon. Older late events
- * require an explicit replay job; this request path never scans the full table.
+ * Findings and their indicator evidence links are persisted atomically.
  */
 export async function evaluateAndPersistAroundEvent(
   tenantId: string,
@@ -65,7 +123,7 @@ export async function evaluateAndPersistAroundEvent(
         WHERE tenant_id = $1
           AND observed_at >= $2::timestamptz - INTERVAL '10 minutes'
           AND observed_at <= $2::timestamptz + INTERVAL '10 minutes'
-        ORDER BY observed_at ASC, event_id ASC
+        ORDER BY observed_at ASC, connector_id ASC, event_id ASC
         LIMIT 5000`,
       [tenantId, event.observed_at]
     );
@@ -79,11 +137,13 @@ export async function evaluateAndPersistAroundEvent(
     }
 
     const findings = evaluateDetections(events);
-    return insertFindings(client, tenantId, findings);
+    const insertedCount = await insertFindings(client, tenantId, findings);
+    await persistFindingThreatMatches(client, tenantId, findings, events);
+    return insertedCount;
   });
 }
 
-/** Lists findings only inside an explicit tenant transaction. */
+/** Lists findings with only their exact, tenant-scoped threat-match evidence. */
 export async function listDetectionFindings(
   tenantId: string,
   limit = 100
@@ -93,13 +153,44 @@ export async function listDetectionFindings(
   }
   return withTenantTransaction(tenantId, async (client) => {
     const result = await client.query(
-      `SELECT finding_id, rule_id, rule_version, status, title, explanation,
-              severity, confidence, first_seen_at, last_seen_at,
-              evidence_event_ids, grouping_key_hash, matched_conditions,
-              known_limitations, created_at, updated_at
-         FROM onishield.detection_findings
-        WHERE tenant_id = $1
-        ORDER BY last_seen_at DESC, id DESC
+      `SELECT f.finding_id, f.rule_id, f.rule_version, f.status, f.title,
+              f.explanation, f.severity, f.confidence, f.first_seen_at,
+              f.last_seen_at, f.evidence_event_ids, f.evidence_event_refs,
+              f.grouping_key_hash, f.matched_conditions, f.known_limitations,
+              f.created_at, f.updated_at,
+              COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'connector_id', l.connector_id,
+                    'event_id', l.event_id,
+                    'indicator_id', m.indicator_id::text,
+                    'indicator_version', m.indicator_version,
+                    'indicator_type', i.indicator_type,
+                    'matched_field_path', m.matched_field_path,
+                    'confidence', i.confidence,
+                    'tlp', i.tlp,
+                    'indicator_status', i.status,
+                    'source_id', i.source_id::text,
+                    'matcher_version', m.matcher_version,
+                    'matched_at', m.matched_at
+                  ) ORDER BY m.matched_at DESC
+                )
+                FROM onishield.detection_finding_threat_matches AS l
+                JOIN onishield.threat_indicator_matches AS m
+                  ON m.id = l.threat_match_id
+                 AND m.tenant_id = l.tenant_id
+                 AND m.connector_id = l.connector_id
+                 AND m.event_id = l.event_id
+                JOIN onishield.threat_indicators AS i
+                  ON i.tenant_id = m.tenant_id
+                 AND i.id = m.indicator_id
+                 AND i.version = m.indicator_version
+                WHERE l.tenant_id = f.tenant_id
+                  AND l.finding_id = f.finding_id
+              ), '[]'::jsonb) AS threat_intelligence_matches
+         FROM onishield.detection_findings AS f
+        WHERE f.tenant_id = $1
+        ORDER BY f.last_seen_at DESC, f.id DESC
         LIMIT $2`,
       [tenantId, limit]
     );
