@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test src/*.test.ts",
-    "check:lines": "node scripts/check-source-lines.mjs"
+    "check:lines": "node scripts/check-source-lines.mjs",
+    "start:replay-worker": "node dist/detection-replay-worker.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
