@@ -130,7 +130,7 @@ BEGIN
      OR length(btrim(COALESCE(p_reason,''))) NOT BETWEEN 10 AND 500 THEN
     RAISE EXCEPTION 'Invalid endpoint revocation request';
   END IF;
-  SELECT s.tenant_id,s.role_placeholder,m.role,s.step_up_at
+  SELECT s.tenant_id,m.role,s.step_up_at
     INTO trusted
     FROM onishield.operator_sessions s
     JOIN onishield.operators o ON o.id=s.operator_id
