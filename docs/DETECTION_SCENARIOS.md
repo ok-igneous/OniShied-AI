@@ -1,6 +1,6 @@
 # Initial Detection Scenario Catalogue
 
-**Status:** Design specification only; no detection engine is implemented yet.  
+**Status:** The first two scenarios have a pure, batch-oriented implementation in `src/detection-engine.ts`. Persistence, ingestion integration, streaming state, and customer alert delivery remain unimplemented.  
 **Scope:** Controlled synthetic Linux identity/security telemetry.  
 **Safety:** All examples are synthetic. No live systems, credential attacks, or external targets are involved.
 
@@ -118,4 +118,4 @@ Do not store a model-generated narrative as the source of truth for a determinis
 
 ## Implementation gate
 
-Do not implement or enable these rules against customer telemetry until event ingestion, tenant isolation, idempotency, and database tests pass. First implement and test against the synthetic fixture set only.
+The first two rules are implemented as a pure evaluator and have unit tests. They are not yet enabled against customer telemetry. Before customer use, implement tenant-scoped finding persistence, authenticated finding queries, bounded streaming/late-arrival semantics, duplicate suppression across batches, and end-to-end tests. Until then, use only controlled synthetic events. The engine does not execute response actions.
