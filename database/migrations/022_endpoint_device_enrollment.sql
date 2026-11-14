@@ -153,5 +153,5 @@ REVOKE ALL ON FUNCTION onishield.create_endpoint_enrollment_token(TEXT,TEXT,TEXT
 REVOKE ALL ON FUNCTION onishield.claim_endpoint_enrollment(TEXT,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onishield.revoke_endpoint_agent(TEXT,UUID,TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.create_endpoint_enrollment_token(TEXT,TEXT,TEXT,TEXT) TO onishield_auth;
-GRANT EXECUTE ON FUNCTION onishield.claim_endpoint_enrollment(TEXT,TEXT,TEXT,TEXT,TEXT) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.claim_endpoint_enrollment(TEXT,TEXT,TEXT,TEXT,TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.revoke_endpoint_agent(TEXT,UUID,TEXT) TO onishield_auth;
