@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Credential-authenticated endpoint telemetry and canonical security-event bridge.
 CREATE TABLE onishield.endpoint_telemetry_events (
   tenant_id TEXT NOT NULL,
@@ -195,3 +197,5 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO onishield_auth;
+
+COMMIT;
