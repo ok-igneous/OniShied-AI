@@ -41,6 +41,19 @@ Design contracts: [threat intelligence](THREAT_INTELLIGENCE_CONTRACT.md) and [in
 
 **Exit gate:** AI produces bounded, evidence-linked investigation summaries without action privileges.
 
+## Phase 3.5 — Adaptive intelligence learning
+
+Design contract: [Adaptive Intelligence Learning](ADAPTIVE_INTELLIGENCE_LEARNING.md). This is an accepted design direction, not an implemented learning service.
+- [ ] Define strict candidate schemas for AI discoveries, incident outcomes, operator corrections, and approved external intelligence.
+- [ ] Implement tenant-scoped quarantine, provenance, deduplication, and append-only audit.
+- [ ] Implement authenticated human review; AI must not approve its own candidates.
+- [ ] Build deterministic replay/evaluation against historical and synthetic benign/malicious fixtures.
+- [ ] Publish only approved, immutable, versioned knowledge packages to native detection.
+- [ ] Add monitoring, expiry, revocation, rollback, and provider-outage tests.
+- [ ] Keep cross-tenant learning disabled until explicit opt-in, privacy, licensing, and global-namespace controls are designed and tested.
+
+**Exit gate:** a candidate can move from provenance-backed quarantine through human review and replay tests into a reversible active knowledge package; AI cannot directly activate rules or authorize response.
+
 ## Phase 4 — Policy-gated response and configurable Autopilot
 
 Normative contract: [Configurable Autopilot](AUTOPILOT_CONTRACT.md). This is a design contract, not an implemented feature.
