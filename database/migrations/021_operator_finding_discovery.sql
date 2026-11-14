@@ -25,21 +25,21 @@ BEGIN
      OR (p_status IS NOT NULL AND p_status NOT IN
        ('open','acknowledged','investigating','resolved','reopened','suppressed'))
      OR (p_severity IS NOT NULL AND p_severity NOT IN ('info','low','medium','high','critical'))
-     OR (p_query IS NOT NULL AND length(p_query) > 100) THEN
+     OR (p_query IS NOT NULL AND (length(p_query) > 100 OR p_query ~ '[%_]')) THEN
     RAISE EXCEPTION 'Invalid operator finding query';
   END IF;
 
-  SELECT session_row.tenant_id, membership.role
+  SELECT session_row.tenant_id, membership_row.role
     INTO trusted_session
     FROM onishield.operator_sessions AS session_row
     JOIN onishield.operators AS operator_row ON operator_row.id = session_row.operator_id
-    JOIN onishield.operator_memberships AS membership
-      ON membership.id = session_row.membership_id
-     AND membership.tenant_id = session_row.tenant_id
-     AND membership.operator_id = session_row.operator_id
+    JOIN onishield.operator_memberships AS membership_row
+      ON membership_row.id = session_row.membership_id
+     AND membership_row.tenant_id = session_row.tenant_id
+     AND membership_row.operator_id = session_row.operator_id
    WHERE session_row.token_hash = p_token_hash
      AND session_row.revoked_at IS NULL AND session_row.expires_at > NOW()
-     AND operator_row.status = 'active' AND membership.status = 'active'
+     AND operator_row.status = 'active' AND membership_row.status = 'active'
    FOR SHARE OF session_row;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized operator finding query'; END IF;
