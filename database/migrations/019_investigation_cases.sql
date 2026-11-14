@@ -113,7 +113,7 @@ BEGIN
     JOIN onishield.operator_memberships m ON m.id=session_row.membership_id
       AND m.tenant_id=session_row.tenant_id AND m.operator_id=session_row.operator_id
    WHERE session_row.token_hash=p_token_hash AND session_row.revoked_at IS NULL AND session_row.expires_at>NOW()
-     AND o.status='active' AND m.status='active' FOR UPDATE OF s;
+     AND o.status='active' AND m.status='active' FOR UPDATE OF session_row;
   IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized investigation request'; END IF;
   IF trusted.role NOT IN ('owner','admin','security_analyst') THEN RAISE EXCEPTION 'Forbidden investigation mutation'; END IF;
   IF trusted.step_up_at IS NULL OR trusted.step_up_at<NOW()-INTERVAL '5 minutes'
@@ -163,7 +163,7 @@ BEGIN
     JOIN onishield.operator_memberships m ON m.id=session_row.membership_id
       AND m.tenant_id=session_row.tenant_id AND m.operator_id=session_row.operator_id
    WHERE session_row.token_hash=p_token_hash AND session_row.revoked_at IS NULL AND session_row.expires_at>NOW()
-     AND o.status='active' AND m.status='active' FOR UPDATE OF s;
+     AND o.status='active' AND m.status='active' FOR UPDATE OF session_row;
   IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized investigation request'; END IF;
   IF trusted.role NOT IN ('owner','admin','security_analyst') THEN RAISE EXCEPTION 'Forbidden investigation mutation'; END IF;
   IF trusted.step_up_at IS NULL OR trusted.step_up_at<NOW()-INTERVAL '5 minutes'
@@ -203,7 +203,7 @@ BEGIN
     JOIN onishield.operator_memberships m ON m.id=session_row.membership_id
       AND m.tenant_id=session_row.tenant_id AND m.operator_id=session_row.operator_id
    WHERE session_row.token_hash=p_token_hash AND session_row.revoked_at IS NULL AND session_row.expires_at>NOW()
-     AND o.status='active' AND m.status='active' FOR UPDATE OF s;
+     AND o.status='active' AND m.status='active' FOR UPDATE OF session_row;
   IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized investigation request'; END IF;
   IF trusted.role NOT IN ('owner','admin','security_analyst') THEN RAISE EXCEPTION 'Forbidden investigation mutation'; END IF;
   IF trusted.step_up_at IS NULL OR trusted.step_up_at<NOW()-INTERVAL '5 minutes'
