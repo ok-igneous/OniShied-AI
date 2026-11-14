@@ -1,8 +1,8 @@
 # Encrypted PostgreSQL Backup and Restore Lab
 
-**Status:** Initial CLI implementation authored on an unmerged branch; not executed or operationally verified.  
-**Scope:** One PostgreSQL database, encrypted local artifact, authenticated manifest, archive verification, and restore into a new empty isolated database.  
-**Not included:** Scheduler, remote/off-site vault, immutable retention, WAL/PITR, object storage, tenant-level selective restore, production dashboard, or measured RPO/RTO.
+**Status:** Draft implementation on an unmerged branch; integration drill is wired into CI but has not yet passed.  
+**Scope:** One PostgreSQL database, encrypted local artifact, authenticated manifest, archive verification, isolated restore, and optional S3-compatible immutable upload/download.  
+**Not included:** Scheduler, WAL/PITR, object/evidence backup, tenant-level selective restore, production dashboard, or measured RPO/RTO.
 
 ## Prerequisites
 
@@ -73,7 +73,7 @@ The restore target must have required PostgreSQL roles and extensions provisione
 - Copy artifacts to a separate account/project or immutable object-lock vault using a dedicated backup identity. Never let the production application identity delete backup history.
 - Add retention only after legal, customer and storage-cost requirements are decided.
 - Add WAL archiving/PITR only after selecting and testing the actual PostgreSQL hosting model.
-- Run a real PostgreSQL 16 create → verify → restore → application/tenant-isolation drill in a disposable environment. Record measured duration and data-loss window before publishing RPO/RTO.
+- CI now includes a disposable PostgreSQL 16 create → verify → restore integration test with recovered-row and authentication-invalidation assertions. This test is authored and wired, not yet observed passing. A separate application/tenant-isolation drill is still required. Record measured duration and data-loss window before publishing RPO/RTO.
 - Keep encryption keys outside the backup destination and test key recovery/rotation. Do not place the key in the manifest, repository, backup directory, or logs.
 - Do not treat local encrypted artifacts as ransomware-resistant: an attacker with write/delete access to the host can still destroy them.
 
