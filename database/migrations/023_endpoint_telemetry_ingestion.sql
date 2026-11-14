@@ -60,7 +60,7 @@ BEGIN
     RAISE EXCEPTION 'Invalid endpoint telemetry batch';
   END IF;
 
-  SELECT a.id,a.tenant_id,a.platform,a.status,a.hostname
+  SELECT a.id,a.tenant_id,a.platform,a.status,a.hostname,a.agent_version
     INTO trusted
     FROM onishield.endpoint_agents a
    WHERE a.credential_hash=p_credential_hash
@@ -81,12 +81,17 @@ BEGIN
       RAISE EXCEPTION 'Invalid endpoint event identity';
     END;
     IF event_agent <> trusted.id OR item->>'platform' <> trusted.platform
+       OR item->>'agent_version' IS DISTINCT FROM trusted.agent_version
        OR event_sequence <= 0
        OR item->>'kind' NOT IN (
          'heartbeat','process_start','authentication','network_connection','file_integrity','service_change'
        )
-       OR (item->>'observed_at') IS NULL OR (item->>'collected_at') IS NULL THEN
-      RAISE EXCEPTION 'Endpoint event identity or platform mismatch';
+       OR (item->>'observed_at') IS NULL OR (item->>'collected_at') IS NULL
+       OR (item->>'observed_at')::TIMESTAMPTZ > NOW()+INTERVAL '5 minutes'
+       OR (item->>'collected_at')::TIMESTAMPTZ > NOW()+INTERVAL '5 minutes'
+       OR (item->>'kind'='heartbeat'
+           AND item->'data'->>'hostname' IS DISTINCT FROM trusted.hostname) THEN
+      RAISE EXCEPTION 'Endpoint event identity, version, hostname, platform, or timestamp mismatch';
     END IF;
 
     INSERT INTO onishield.endpoint_telemetry_events(
