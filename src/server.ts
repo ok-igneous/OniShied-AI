@@ -41,7 +41,7 @@ const accountLifecycle = authPool && config.authRateLimitSecret && config.mfaRec
     )
   : null;
 registerOperatorAccountRoutes(app, accountLifecycle);
-registerDetectionFindingRoutes(app, operatorAuth);
+registerDetectionFindingRoutes(app, operatorAuth, authPool);
 
 function authorizedBearer(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
