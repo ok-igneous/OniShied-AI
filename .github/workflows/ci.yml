@@ -51,6 +51,7 @@ jobs:
           MIGRATOR_DB_PASSWORD="$(openssl rand -hex 32)"
           APP_DB_PASSWORD="$(openssl rand -hex 32)"
           AUTH_DB_PASSWORD="$(openssl rand -hex 32)"
+          ENDPOINT_INGEST_DB_PASSWORD="$(openssl rand -hex 32)"
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -v migrator_password="$MIGRATOR_DB_PASSWORD" \
             -v app_password="$APP_DB_PASSWORD" \
