@@ -107,7 +107,25 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='unregistered agent version was accepted' THEN RAISE; END IF;
   END;
-END $$;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('platform',NULL))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'null platform was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='null platform was accepted' THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event - 'agent_id')
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'missing agent identity was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='missing agent identity was accepted' THEN RAISE; END IF;
+  END;
+END $;
 
 SELECT onishield.revoke_endpoint_agent(
   repeat('a',64),(SELECT agent_id FROM telemetry_smoke_agent),'Smoke test revocation'
