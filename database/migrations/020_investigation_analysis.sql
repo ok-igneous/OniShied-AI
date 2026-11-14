@@ -172,12 +172,16 @@ BEGIN
         'evidence',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'connector_id',e.connector_id,'event_id',e.event_id,
-            'observed_at',ev.observed_at,'event_type',ev.event_type
-          ) ORDER BY ev.observed_at,e.connector_id,e.event_id)
-          FROM onishield.detection_finding_evidence e
-          JOIN onishield.security_events ev
-            ON ev.tenant_id=e.tenant_id AND ev.connector_id=e.connector_id AND ev.event_id=e.event_id
-          WHERE e.tenant_id=f.tenant_id AND e.finding_id=f.finding_id
+            'observed_at',e.observed_at,'event_type',e.event_type
+          ) ORDER BY e.observed_at,e.connector_id,e.event_id)
+          FROM (
+            SELECT ev.connector_id,ev.event_id,ev.observed_at,ev.event_type
+            FROM onishield.detection_finding_evidence e
+            JOIN onishield.security_events ev
+              ON ev.tenant_id=e.tenant_id AND ev.connector_id=e.connector_id AND ev.event_id=e.event_id
+            WHERE e.tenant_id=f.tenant_id AND e.finding_id=f.finding_id
+            ORDER BY ev.observed_at,e.connector_id,e.event_id LIMIT 500
+          ) e
         ),'[]'::jsonb),
         'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
@@ -188,17 +192,22 @@ BEGIN
             'matcher_version',tm.matcher_version,'matched_field_path',tm.matched_field_path,
             'matched_at',tm.matched_at,'valid_from',ti.valid_from,'expires_at',ti.expires_at
           ) ORDER BY tm.matched_at DESC)
-          FROM onishield.detection_finding_threat_matches ftm
-          JOIN onishield.threat_indicator_matches tm
-            ON tm.tenant_id=ftm.tenant_id AND tm.id=ftm.threat_match_id
-           AND tm.connector_id=ftm.connector_id AND tm.event_id=ftm.event_id
-          JOIN onishield.threat_indicators ti
-            ON ti.tenant_id=tm.tenant_id AND ti.id=tm.indicator_id
-           AND ti.version=tm.indicator_version
-          JOIN onishield.threat_intelligence_sources src
-            ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
-          WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
-        ),'[]'::jsonb)
+          FROM (
+            SELECT ti.indicator_type,ti.value_normalized,ti.confidence,ti.tlp,
+              ti.status,ti.version,src.display_name,src.source_kind,
+              tm.matcher_version,tm.matched_field_path,tm.matched_at,ti.valid_from,ti.expires_at
+            FROM onishield.detection_finding_threat_matches ftm
+            JOIN onishield.threat_indicator_matches tm
+              ON tm.tenant_id=ftm.tenant_id AND tm.id=ftm.threat_match_id
+             AND tm.connector_id=ftm.connector_id AND tm.event_id=ftm.event_id
+            JOIN onishield.threat_indicators ti
+              ON ti.tenant_id=tm.tenant_id AND ti.id=tm.indicator_id
+             AND ti.version=tm.indicator_version
+            JOIN onishield.threat_intelligence_sources src
+              ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
+            WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
+            ORDER BY tm.matched_at DESC LIMIT 100
+          ) tm
       ) ORDER BY f.last_seen_at DESC)
       FROM onishield.investigation_case_findings a
       JOIN onishield.detection_findings f
