@@ -216,6 +216,25 @@ BEGIN
           WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
         'threat_matches_truncated',(SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc
           WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
+        'threat_matches_withheld_count',(SELECT count(*)
+          FROM onishield.detection_finding_threat_matches tc
+          JOIN onishield.threat_indicator_matches tim
+            ON tim.tenant_id=tc.tenant_id AND tim.id=tc.threat_match_id
+          JOIN onishield.threat_indicators ti
+            ON ti.tenant_id=tim.tenant_id AND ti.id=tim.indicator_id
+          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id AND ti.tlp<>'clear'),
+        'threat_matches_truncated',(
+          (SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc
+            WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id)
+          OR EXISTS (
+            SELECT 1 FROM onishield.detection_finding_threat_matches tc
+            JOIN onishield.threat_indicator_matches tim
+              ON tim.tenant_id=tc.tenant_id AND tim.id=tc.threat_match_id
+            JOIN onishield.threat_indicators ti
+              ON ti.tenant_id=tim.tenant_id AND ti.id=tim.indicator_id
+            WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id AND ti.tlp<>'clear'
+          )
+        ),
         'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'indicator_type',match_data.indicator_type,
