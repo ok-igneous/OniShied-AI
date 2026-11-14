@@ -11,20 +11,18 @@ const base = {
   collected_at:"2026-11-14T10:00:01.000Z",
   agent_version:"0.1.0",platform:"linux" as const
 };
+const heartbeat = (overrides: Record<string, unknown> = {}) => ({
+  ...base,...overrides,kind:"heartbeat" as const,
+  data:{os_version:"6.8",hostname:"workstation-01",capabilities:[],clock_skew_ms:0}
+});
 
 test("accepts a bounded heartbeat batch",()=>{
-  const result=endpointTelemetryBatchSchema.safeParse({events:[{
-    ...base,kind:"heartbeat",
-    data:{os_version:"6.8",hostname:"workstation-01",capabilities:[],clock_skew_ms:0}
-  }]});
+  const result=endpointTelemetryBatchSchema.safeParse({events:[heartbeat()]});
   assert.equal(result.success,true);
 });
 
 test("rejects event batches with unknown tenant or credential fields",()=>{
-  const result=endpointTelemetryBatchSchema.safeParse({tenant_id:"attacker-tenant",events:[{
-    ...base,kind:"heartbeat",
-    data:{os_version:"6.8",hostname:"workstation-01",capabilities:[],clock_skew_ms:0}
-  }]});
+  const result=endpointTelemetryBatchSchema.safeParse({tenant_id:"attacker-tenant",events:[heartbeat()]});
   assert.equal(result.success,false);
 });
 
@@ -33,6 +31,38 @@ test("rejects invalid IP and malformed timestamps",()=>{
     ...base,observed_at:"not-a-date",kind:"network_connection",
     data:{protocol:"tcp",direction:"outbound",local_port:5000,remote_port:443,remote_address:"not-an-ip"}
   }]});
+  assert.equal(result.success,false);
+});
+
+test("rejects duplicate sequence identities inside one batch",()=>{
+  const result=endpointTelemetryBatchSchema.safeParse({events:[
+    heartbeat(),heartbeat({event_id:"b3a2c4d6-4444-4444-8444-444444444444"})
+  ]});
+  assert.equal(result.success,false);
+});
+
+test("rejects event ID reuse even when sequence differs",()=>{
+  const result=endpointTelemetryBatchSchema.safeParse({events:[
+    heartbeat(),heartbeat({sequence:2})
+  ]});
+  assert.equal(result.success,false);
+});
+
+test("rejects mixed-agent batches before database access",()=>{
+  const result=endpointTelemetryBatchSchema.safeParse({events:[
+    heartbeat(),heartbeat({
+      agent_id:"c4b3d5e7-1111-4111-8111-111111111111",
+      event_id:"c4b3d5e7-2222-4222-8222-222222222222",
+      sequence:2
+    })
+  ]});
+  assert.equal(result.success,false);
+});
+
+test("rejects collection timestamps more than five minutes before observation",()=>{
+  const result=endpointTelemetryBatchSchema.safeParse({events:[
+    heartbeat({collected_at:"2026-11-14T09:54:59.000Z"})
+  ]});
   assert.equal(result.success,false);
 });
 
