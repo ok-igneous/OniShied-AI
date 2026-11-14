@@ -1,4 +1,22 @@
--- Run after migrations 001-023 in a disposable database as onishield_owner.
+-- Run after migrations 001-024 in a disposable database as onishield_owner.
+DO $ingestion_role_smoke$
+BEGIN
+  IF NOT has_schema_privilege('onishield_ingest','onishield','USAGE')
+     OR NOT has_function_privilege('onishield_ingest',
+       'onishield.ingest_endpoint_telemetry(text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'dedicated ingestion role is missing required function access';
+  END IF;
+  IF has_function_privilege('onishield_auth',
+       'onishield.ingest_endpoint_telemetry(text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'operator-auth role can invoke endpoint ingestion';
+  END IF;
+  IF has_table_privilege('onishield_ingest','onishield.endpoint_agents','SELECT')
+     OR has_table_privilege('onishield_ingest','onishield.endpoint_telemetry_events','SELECT')
+     OR has_table_privilege('onishield_ingest','onishield.security_events','SELECT') THEN
+    RAISE EXCEPTION 'dedicated ingestion role has direct table read access';
+  END IF;
+END $ingestion_role_smoke$;
+
 BEGIN;
 INSERT INTO onishield.operators(email,password_hash,display_name,status)
 VALUES ('endpoint-telemetry-smoke@example.invalid','test-only-not-a-real-password-hash','Endpoint Telemetry Smoke','active');
@@ -134,6 +152,37 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='fractional sequence was accepted' THEN RAISE; END IF;
   END;
+  -- The database rejects extra kind-specific fields even when callers bypass Zod.
+  IF onishield.endpoint_telemetry_event_is_valid(
+    (SELECT event || jsonb_build_object('data',
+      event->'data' || jsonb_build_object('unexpected','value'))
+     FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+  ) THEN RAISE EXCEPTION 'database accepted an unknown telemetry field'; END IF;
+  IF onishield.endpoint_telemetry_event_is_valid(
+    (SELECT event || jsonb_build_object('data',
+      event->'data' || jsonb_build_object('capabilities',jsonb_build_array(NULL)))
+     FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+  ) THEN RAISE EXCEPTION 'database accepted a non-string heartbeat capability'; END IF;
+
+  -- Per-device event attempts are bounded durably at the database boundary.
+  INSERT INTO onishield.endpoint_telemetry_rate_limits(
+    tenant_id,agent_id,minute_bucket,event_attempts
+  )
+  SELECT 'endpoint-telemetry-smoke',agent_id,date_trunc('minute',clock_timestamp()),1000
+    FROM telemetry_smoke_agent
+  ON CONFLICT (tenant_id,agent_id,minute_bucket) DO UPDATE SET event_attempts=1000;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object(
+        'sequence',3,'event_id','b3a2c4d6-5555-4555-8555-555555555555'))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'telemetry rate limit was not enforced';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='telemetry rate limit was not enforced' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%Endpoint telemetry rate limit exceeded%' THEN RAISE; END IF;
+  END;
+
   BEGIN
     PERFORM * FROM onishield.ingest_endpoint_telemetry(
       repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('observed_at','not-a-timestamp'))

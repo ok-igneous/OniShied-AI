@@ -27,10 +27,11 @@ function connectorAuthorized(header: string | undefined): boolean {
 export function registerDetectionFindingRoutes(
   app: FastifyInstance,
   operatorAuth: OperatorAuthService | null,
-  authDatabase: Pick<Pool, "query"> | null
+  authDatabase: Pick<Pool, "query"> | null,
+  endpointIngestionDatabase: Pick<Pool, "query"> | null = null
 ): void {
   registerEndpointEnrollmentRoutes(app, operatorAuth, authDatabase, authDatabase);
-  registerEndpointTelemetryRoutes(app, authDatabase);
+  registerEndpointTelemetryRoutes(app, endpointIngestionDatabase);
   registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get("/v1/operator/findings", async (request, reply) => {
