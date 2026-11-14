@@ -116,6 +116,42 @@ export function registerInvestigationRoutes(
       return handleError(request, reply, error, "investigation_note_failed");
     }
   });
+  app.post<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/analyze", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "detection:triage");
+      const result = await database.query<{ job_id: string }>(
+        "SELECT onishield.request_investigation_analysis($1,$2::uuid,$3) AS job_id",
+        [hashOperatorSessionToken(token), request.params.caseId, request.id]
+      );
+      reply.header("cache-control", "no-store");
+      return reply.code(202).send({ jobId: result.rows[0]?.job_id, status: "queued" });
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_analysis_request_failed");
+    }
+  });
+
+  app.get<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/reports", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "investigation:read");
+      const result = await database.query<{ reports: unknown }>(
+        "SELECT onishield.list_investigation_analysis_reports($1,$2::uuid) AS reports",
+        [hashOperatorSessionToken(token), request.params.caseId]
+      );
+      reply.header("cache-control", "no-store");
+      return { reports: result.rows[0]?.reports ?? [] };
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_reports_unavailable");
+    }
+  });
+
 }
 
 function bearer(header: string | undefined): string | null {
