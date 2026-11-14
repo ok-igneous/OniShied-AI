@@ -2,7 +2,7 @@
 
 ## Status
 
-Design decision for the next detection-engine implementation milestone. This document is not evidence that lifecycle management or durable replay has been implemented.
+Stable finding episode identity and idempotent evidence persistence are implemented in the source and migration layer. Analyst lifecycle management and durable replay remain design-only.
 
 ## Why this work is required
 
@@ -16,11 +16,7 @@ Adding analyst workflow states before correcting these identity and replay limit
 
 A finding/incident must have a stable identity independent of its current evidence list.
 
-The identity key should include:
-- tenant ID;
-- detection rule ID and rule version;
-- the detector's normalized grouping dimensions (for example host, principal, and source address where applicable);
-- a documented episode-boundary policy.
+The implemented identity key is SHA-256 over structured JSON containing tenant ID, rule ID, rule version, grouping-key hash, and the structured episode-anchor pair `(connector_id, event_id)`. The anchor is the first event that satisfies the rule: the eighth failure for a burst, or the qualifying success for a failure-then-success sequence. The evolving evidence set is excluded.
 
 The identity must not include the complete evidence-event list. Evidence references remain structured pairs of `connector_id` and `event_id`; they must never be reconstructed by splitting the legacy `connector:event` display string.
 
@@ -28,12 +24,12 @@ The identity must not include the complete evidence-event list. Evidence referen
 
 A rule must explicitly define when activity belongs to the same episode and when a new episode begins. A quiet-period boundary is preferable to a calendar bucket because an arbitrary time bucket can split one continuous attack at midnight or merge separate episodes near a bucket edge.
 
-The initial implementation must define and test:
-- the inactivity interval for each rule;
-- how late-arriving events affect an existing episode;
-- whether a late event can reopen a resolved incident;
-- how concurrent event ingestion is serialized for the same tenant/rule/group;
-- retention and maximum evidence references per incident.
+Implemented episode policy:
+- An authentication burst is anchored at the first event that completes the eight-failure threshold in a rolling five-minute window. Events whose observed time falls within five minutes after that anchor enrich that episode. A later threshold crossing after that post-trigger interval starts another episode.
+- Each qualifying success after at least five failures in the preceding ten minutes is a separate sequence episode, anchored by that success.
+- Late-arriving events after a burst anchor and inside its five-minute episode window enrich the same stable ID. A late event earlier than the anchor can change which event first crosses the threshold in a stateless recomputation; the finding records this limitation. Durable reconciliation of pre-anchor late events is deferred to the replay worker.
+- Concurrent writes for the same finding are serialized by PostgreSQL's unique-key conflict row lock; evidence rows are independently deduplicated by `(tenant_id, finding_id, connector_id, event_id)`.
+- Evidence is append-only at the structured evidence-link table. No per-finding retention cap is introduced in this milestone; operational retention and bounded replay remain future work.
 
 Do not silently merge events across tenants, rules, grouping keys, or unrelated episodes.
 
@@ -91,9 +87,9 @@ Do not add an HTTP route that lets a caller submit arbitrary tenant IDs, timesta
 
 ## Required implementation sequence
 
-1. Add tests that demonstrate the current changing-evidence identity defect.
-2. Implement stable episode identity and concurrency-safe evidence upserts.
-3. Add migration constraints and indexes for episode uniqueness and evidence idempotency.
+1. ~~Add tests that demonstrate the current changing-evidence identity defect.~~ Completed with stable-anchor, episode-boundary, and out-of-order evidence tests.
+2. ~~Implement stable episode identity and concurrency-safe evidence upserts.~~ Implemented stable anchor IDs, conflict-update evidence union, and structured evidence rows.
+3. ~~Add migration constraints and indexes for episode uniqueness and evidence idempotency.~~ Migration 016 adds anchor columns, exact event foreign keys, tenant RLS, and unique evidence identity.
 4. Add append-only lifecycle audit storage and a database-enforced transition function.
 5. Add operator-authenticated lifecycle routes using `detection:triage`; require recent step-up for mutations.
 6. Add a durable replay queue and bounded worker with retry semantics.
@@ -106,7 +102,7 @@ This milestone does not authorize automatic blocking, account disabling, endpoin
 
 ## Verification status
 
-- Source inspection completed for the current detector, finding store, operator authorization map, operator session validation, migrations, and CI workflow.
-- No database migration has been applied in a live environment as part of this design work.
-- No automated tests, typecheck, or build have been executed in this environment.
+- Implemented: stable episode-anchor identity in the detector; explicit burst and sequence episode boundaries; deterministic tests for later and out-of-order evidence; conflict-safe JSON evidence union; structured evidence rows with tenant-scoped foreign keys, uniqueness, and RLS; migration 016 and migration smoke-test coverage.
+- Not implemented: durable replay/reconciliation for events arriving before an existing episode anchor; analyst lifecycle transitions/audit; lifecycle routes; queue/worker; evidence retention controls.
+- Tests, typecheck, build, and database migrations have not been executed in this environment.
 - GitHub Actions has previously been blocked before runner allocation by the account billing/spending restriction. A workflow that never starts does not establish whether the code passes or fails.
