@@ -16,14 +16,15 @@ The following work exists on an open PR stack based on `main`; it is not yet par
 - PR #27: operator-authenticated tenant-scoped finding discovery and selection, so analysts can search indexed title prefixes or exact finding IDs when creating cases.
 - PR #28 branch: deterministic server-side enforcement of AI report limitations when evidence is truncated or threat-intelligence matches are withheld/omitted, with regression tests.
 - PR #29 branch: strict Zod schemas and tests for six Windows/Linux metadata event kinds, pseudonymous identity references, bounded batches, and duplicate sequence rejection. Schema-only; no agent or telemetry ingestion.
-- Endpoint enrollment branch: operator-issued 15-minute, tenant-bound one-time enrollment tokens; atomic single-use device claim; server-generated 256-bit device credential stored as a SHA-256 verifier; owner/admin revocation protected by recent step-up authentication. This is enrollment control-plane work only; the credential is not yet accepted by telemetry ingestion.
+- PR #30: endpoint enrollment control plane with tenant-bound, single-use 15-minute enrollment tokens, 256-bit device credentials stored as SHA-256 verifiers, and owner/admin revocation.
+- PR #31 branch: repairs malformed SQL in migration 022; adds credential-authenticated endpoint telemetry ingestion, tenant/agent/platform binding, atomic persistence, per-boot sequence and event-ID uniqueness, exact-retry idempotency, replay-conflict rejection, and revoked-device rejection. Events are stored in a dedicated table and are not yet normalized into the existing detection pipeline.
 
-PRs #21–27 are open and must be merged in dependency order. Migrations 016–022 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
+PRs #21–27 are open and must be merged in dependency order. Migrations 016–023 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
 
 
 ## Implemented in the repository
 
-- Endpoint telemetry protocol schema foundation on `implementation/endpoint-telemetry-contract`; not wired to ingestion and not an endpoint agent.
+- Endpoint telemetry protocol schema plus credential-authenticated ingestion route and dedicated tenant-bound persistence implementation exist on stacked, unmerged branches; still no endpoint binary, installer, or detection-pipeline adapter.
 
 - TypeScript/Fastify backend scaffold with Zod validation and PostgreSQL access.
 - Canonical security event schema, authenticated lab ingestion, payload digest, and duplicate-event handling.
