@@ -3,7 +3,7 @@
 ## Implemented contract
 
 - `POST /v1/endpoints/telemetry` authenticates a device using its one-time-issued 256-bit enrollment credential. Only the SHA-256 verifier is queried; plaintext credentials are never stored.
-- Tenant, agent ID and enrolled platform are derived from the credential-bound database row. The request cannot select a tenant or another agent.
+- Tenant, agent ID, platform and agent version are bound to the credential-bound database row. Heartbeat hostname must match enrollment. The request cannot select a tenant or another agent; client-supplied future timestamps beyond five minutes are rejected.
 - Requests use the strict telemetry discriminated union and are bounded to 1–100 events; Fastify's body limit is 256 KiB.
 - Persistence is atomic per batch. Each event is unique by tenant + agent + boot + sequence and by tenant + agent + event ID.
 - Exact retries are idempotent. Reuse of a sequence with different content or a different event ID is rejected.
