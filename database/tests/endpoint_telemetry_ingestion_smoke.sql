@@ -134,6 +134,32 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='fractional sequence was accepted' THEN RAISE; END IF;
   END;
+  -- The database rejects extra kind-specific fields even when callers bypass Zod.
+  IF onishield.endpoint_telemetry_event_is_valid(
+    (SELECT event || jsonb_build_object('data',
+      event->'data' || jsonb_build_object('unexpected','value'))
+     FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+  ) THEN RAISE EXCEPTION 'database accepted an unknown telemetry field'; END IF;
+
+  -- Per-device event attempts are bounded durably at the database boundary.
+  INSERT INTO onishield.endpoint_telemetry_rate_limits(
+    tenant_id,agent_id,minute_bucket,event_attempts
+  )
+  SELECT 'endpoint-telemetry-smoke',agent_id,date_trunc('minute',clock_timestamp()),1000
+    FROM telemetry_smoke_agent
+  ON CONFLICT (tenant_id,agent_id,minute_bucket) DO UPDATE SET event_attempts=1000;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object(
+        'sequence',3,'event_id','b3a2c4d6-5555-4555-8555-555555555555'))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'telemetry rate limit was not enforced';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='telemetry rate limit was not enforced' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%Endpoint telemetry rate limit exceeded%' THEN RAISE; END IF;
+  END;
+
   BEGIN
     PERFORM * FROM onishield.ingest_endpoint_telemetry(
       repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('observed_at','not-a-timestamp'))
