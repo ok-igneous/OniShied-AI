@@ -36,7 +36,7 @@ The first demonstrator should use synthetic events in a controlled lab:
 1. Ingest an authenticated synthetic security event.
 2. Preserve provenance and normalize the event.
 3. Detect a documented suspicious pattern deterministically.
-4. Present evidence-linked investigation results when that service is implemented and tested.
+4. Present evidence-linked investigation cases and advisory AI analysis (implementation exists; verification is outstanding).
 5. Show a policy decision and approval boundary.
 6. Execute a reversible lab action only after its implementation and tests pass.
 7. Verify and audit the outcome.
@@ -57,6 +57,7 @@ A repeatable end-to-end workflow is more valuable than a broad dashboard mock-up
 ## Repository map
 
 - `docs/FEATURE_CATALOG.md` — product-wide feature inventory and implementation status.
+- `docs/INVESTIGATION_CASES_IMPLEMENTATION.md` — investigation cases, AI analysis worker, evidence validation, and limitations.
 - `docs/PRODUCT_VISION.md` — mission, target users, initial scope and demonstrator.
 - `docs/SYSTEM_ARCHITECTURE.md` — proposed components and trust boundaries.
 - `docs/SECURITY_MODEL.md` — threat model and security requirements.
