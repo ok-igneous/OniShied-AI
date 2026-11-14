@@ -19,7 +19,7 @@
 - The event source host reference currently uses the enrolled hostname. The endpoint contract permits a hostname; deployments should review this identifier under their customer privacy policy.
 - The replay worker remains configured for one `LAB_TENANT_ID` per process. Run a worker for each tenant or implement tenant-fair scheduling before relying on asynchronous replay across multiple tenants.
 - No signed agent binary, installer, update channel, device inventory UI, credential rotation, enrollment-claim throttling, per-IP/request rate limiter, or abuse-monitoring pipeline exists.
-- The service still uses the existing `onishield_auth` database pool to invoke the ingestion SECURITY DEFINER function. A separate least-privilege ingestion database role/pool has not yet been provisioned; do not treat the current role boundary as final production hardening.
+- The telemetry route now uses a dedicated `onishield_ingest` login role and `ENDPOINT_INGEST_DATABASE_URL` pool. The role has schema usage and EXECUTE on only the narrow ingestion SECURITY DEFINER function; it has no direct table privileges. The operator-auth role is explicitly denied execution. The URL is optional at startup, but endpoint ingestion fails closed with 503 when it is not configured. Production deployment must provision a distinct secret and connection string.
 - The replay worker still processes one configured tenant per process. Multi-tenant fairness, bounded cross-tenant scheduling, queue metrics and backlog/dead-letter alerting remain unimplemented.
 
 ## Verification gate
