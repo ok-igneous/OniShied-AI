@@ -89,8 +89,13 @@ BEGIN
        OR jsonb_typeof(item->'observed_at') IS DISTINCT FROM 'string'
        OR jsonb_typeof(item->'collected_at') IS DISTINCT FROM 'string'
        OR CASE
-            WHEN jsonb_typeof(item->'sequence')='number'
-             AND (item->>'sequence') ~ '^[1-9][0-9]*       OR item->>'kind' NOT IN (
+            WHEN jsonb_typeof(item->'sequence')='number' THEN
+              (item->>'sequence')::NUMERIC <= 0
+              OR (item->>'sequence')::NUMERIC <> trunc((item->>'sequence')::NUMERIC)
+              OR (item->>'sequence')::NUMERIC > 9007199254740991
+            ELSE true
+          END
+       OR item->>'kind' NOT IN (
          'heartbeat','process_start','authentication','network_connection','file_integrity','service_change'
        ) THEN
       RAISE EXCEPTION 'Invalid endpoint event shape';
