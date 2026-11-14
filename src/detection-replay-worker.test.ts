@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { replayRetryDelayMs } from "./detection-replay-worker.js";
+import { replayRetryDelayMs } from "./detection-replay-policy.js";
 
 test("replay retry delay grows exponentially and is capped", () => {
   assert.equal(replayRetryDelayMs(1), 1_000);
