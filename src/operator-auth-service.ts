@@ -380,6 +380,49 @@ export class OperatorAuthService {
     };
   }
 
+  async transitionDetectionFinding(
+    token: string,
+    findingId: string,
+    newStatus: "acknowledged" | "investigating" | "resolved" | "reopened" | "suppressed",
+    reason: string,
+    requestId?: string
+  ): Promise<{
+    findingId: string;
+    previousStatus: string;
+    newStatus: string;
+    actorOperatorId: string;
+    changedAt: string;
+  }> {
+    const principal = await this.authorize(token, "detection:triage");
+    if (!/^[a-f0-9]{64}$/.test(findingId) ||
+        reason.trim().length < 10 || reason.length > 1000 ||
+        (requestId !== undefined && requestId.length > 128)) {
+      throw new Error("Invalid finding transition request");
+    }
+    const tokenHash = hashOperatorSessionToken(token);
+    const result = await this.database.query<{
+      finding_id: string;
+      previous_status: string;
+      new_status: string;
+      actor_operator_id: string;
+      changed_at: Date | string;
+    }>(
+      "SELECT * FROM onishield.transition_detection_finding($1,$2,$3,$4,$5)",
+      [tokenHash, findingId, newStatus, reason, requestId ?? null]
+    );
+    const row = result.rows[0];
+    if (!row || row.actor_operator_id !== principal.operatorId) {
+      throw new Error("Finding transition failed");
+    }
+    return {
+      findingId: row.finding_id,
+      previousStatus: row.previous_status,
+      newStatus: row.new_status,
+      actorOperatorId: row.actor_operator_id,
+      changedAt: (row.changed_at instanceof Date ? row.changed_at : new Date(row.changed_at)).toISOString()
+    };
+  }
+
   async logout(token: string): Promise<void> {
     let tokenHash: string;
     try { tokenHash = hashOperatorSessionToken(token); } catch { return; }
