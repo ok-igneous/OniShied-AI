@@ -41,7 +41,11 @@ if (parsed.data.AUTH_DATABASE_URL && !parsed.data.MFA_RECOVERY_PEPPER) {
   throw new Error("MFA_RECOVERY_PEPPER is required when AUTH_DATABASE_URL is configured");
 }
 
-if (Boolean(parsed.data.OPENAI_API_KEY) !== Boolean(parsed.data.OPENAI_MODEL)) {\n  throw new Error("OPENAI_API_KEY and OPENAI_MODEL must be configured together");\n}\n\nif (Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.EMAIL_FROM) ||
+if (Boolean(parsed.data.OPENAI_API_KEY) !== Boolean(parsed.data.OPENAI_MODEL)) {
+  throw new Error("OPENAI_API_KEY and OPENAI_MODEL must be configured together");
+}
+
+if (Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.EMAIL_FROM) ||
     Boolean(parsed.data.RESEND_API_KEY) !== Boolean(parsed.data.APP_PUBLIC_URL)) {
   throw new Error("RESEND_API_KEY, EMAIL_FROM, and APP_PUBLIC_URL must be configured together");
 }
@@ -65,7 +69,9 @@ export const config = {
   mfaRecoveryPepper: parsed.data.MFA_RECOVERY_PEPPER,
   resendApiKey: parsed.data.RESEND_API_KEY,
   emailFrom: parsed.data.EMAIL_FROM,
-  publicUrl: parsed.data.APP_PUBLIC_URL,\n  openAiApiKey: parsed.data.OPENAI_API_KEY,\n  openAiModel: parsed.data.OPENAI_MODEL,
+  publicUrl: parsed.data.APP_PUBLIC_URL,
+  openAiApiKey: parsed.data.OPENAI_API_KEY,
+  openAiModel: parsed.data.OPENAI_MODEL,
   databaseSsl: parsed.data.DATABASE_SSL === "true",
   connectorId: parsed.data.LAB_CONNECTOR_ID,
   connectorToken: parsed.data.LAB_CONNECTOR_TOKEN,
