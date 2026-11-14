@@ -108,3 +108,54 @@ test("findings carry deterministic IDs and immutable evidence references", () =>
   assert.deepEqual(first.evidence_event_ids, events.map((item) => item.event_id));
   assert.equal(first.rule_version, "1.0.0");
 });
+
+
+test("burst window includes an event exactly five minutes old", () => {
+  const events = Array.from({ length: 8 }, (_, i) =>
+    event({ id: `edge-${i}`, at: at(i === 0 ? 0 : 300) })
+  );
+  assert.equal(evaluateDetections(events).filter((item) => item.rule_id === "AUTH_FAILURE_BURST").length, 1);
+});
+
+test("burst detection does not combine different source addresses", () => {
+  const events = Array.from({ length: 8 }, (_, i) =>
+    event({ id: `addr-${i}`, at: at(i * 10), address: i < 4 ? "192.0.2.10" : "192.0.2.11" })
+  );
+  assert.equal(evaluateDetections(events).length, 0);
+});
+
+test("sequence detection correlates the same principal across source addresses", () => {
+  const failures = Array.from({ length: 5 }, (_, i) =>
+    event({ id: `multi-${i}`, at: at(i * 20), address: "192.0.2.10" })
+  );
+  const success = event({
+    id: "multi-success",
+    type: "identity.authentication.success",
+    at: at(120),
+    address: "198.51.100.8"
+  });
+  assert.equal(evaluateDetections([...failures, success])[0]?.rule_id, "AUTH_FAILURE_THEN_SUCCESS");
+});
+
+test("sequence detection includes a failure exactly ten minutes before success", () => {
+  const failures = Array.from({ length: 5 }, (_, i) =>
+    event({ id: `ten-${i}`, at: at(i === 0 ? 0 : 1) })
+  );
+  const success = event({
+    id: "ten-success",
+    type: "identity.authentication.success",
+    at: at(600)
+  });
+  assert.equal(evaluateDetections([...failures, success]).length, 1);
+});
+
+test("missing principal or host reference produces no finding", () => {
+  const failures = Array.from({ length: 8 }, (_, i) =>
+    event({ id: `missing-${i}`, at: at(i * 5), principal: i === 0 ? " " : "user-a" })
+  );
+  assert.equal(evaluateDetections(failures).length, 0);
+  const missingHost = Array.from({ length: 8 }, (_, i) =>
+    event({ id: `host-${i}`, at: at(i * 5), host: i === 0 ? " " : "host-a" })
+  );
+  assert.equal(evaluateDetections(missingHost).length, 0);
+});
