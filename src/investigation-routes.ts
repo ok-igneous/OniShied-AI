@@ -134,6 +134,24 @@ export function registerInvestigationRoutes(
     }
   });
 
+  app.get<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/analysis-status", async (request, reply) => {
+    if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
+    const token = bearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!caseIdSchema.safeParse(request.params.caseId).success) return reply.code(400).send({ error: "invalid_case_id" });
+    try {
+      await operatorAuth.authorize(token, "investigation:read");
+      const result = await database.query<{ status: unknown }>(
+        "SELECT onishield.get_investigation_analysis_status($1,$2::uuid) AS status",
+        [hashOperatorSessionToken(token), request.params.caseId]
+      );
+      reply.header("cache-control", "no-store");
+      return { analysis: result.rows[0]?.status ?? null };
+    } catch (error) {
+      return handleError(request, reply, error, "investigation_analysis_status_unavailable");
+    }
+  });
+
   app.get<{ Params: { caseId: string } }>("/v1/operator/investigations/:caseId/reports", async (request, reply) => {
     if (!operatorAuth || !database) return reply.code(503).send({ error: "investigation_unavailable" });
     const token = bearer(request.headers.authorization);
