@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
-import { authPool, pool, withTenantTransaction } from "./database.js";
+import { authPool, endpointIngestionPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
@@ -41,7 +41,7 @@ const accountLifecycle = authPool && config.authRateLimitSecret && config.mfaRec
     )
   : null;
 registerOperatorAccountRoutes(app, accountLifecycle);
-registerDetectionFindingRoutes(app, operatorAuth, authPool);
+registerDetectionFindingRoutes(app, operatorAuth, authPool, endpointIngestionPool);
 
 function authorizedBearer(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -482,6 +482,7 @@ const shutdown = async (signal: string) => {
   await app.close();
   await pool.end();
   await authPool?.end();
+  await endpointIngestionPool?.end();
   process.exit(0);
 };
 
@@ -495,5 +496,6 @@ try {
   app.log.error(error);
   await pool.end();
   await authPool?.end();
+  await endpointIngestionPool?.end();
   process.exit(1);
 }
