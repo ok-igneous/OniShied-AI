@@ -156,7 +156,7 @@ async function main() {
     retention_until: retentionDate.toISOString(),
     artifact: { key: artifactKey, ...artifactResult },
     manifest: { key: manifestKey, ...manifestResult }
-  }, null, 2) + "\\n");
+  }, null, 2) + String.fromCharCode(10));
   await client.destroy();
 }
 
