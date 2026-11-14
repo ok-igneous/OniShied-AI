@@ -62,7 +62,7 @@ $('disconnect').onclick=()=>{token='';selected='';sessionStorage.removeItem('oni
 $('refresh').onclick=()=>act(loadCases);
 $('createCase').onclick=()=>act(async()=>{
  const title=$('newCaseTitle').value.trim();
- const findingIds=$('newCaseFindingIds').value.split(/[\\s,]+/).filter(Boolean);
+ const findingIds=$('newCaseFindingIds').value.split(/[\s,]+/).filter(Boolean);
  const reason=$('newCaseReason').value.trim();
  if(title.length<3||title.length>160)throw Error('Case title must be 3–160 characters.');
  if(findingIds.length<1||findingIds.length>25||findingIds.some(id=>! /^[a-f0-9]{64}$/.test(id)))throw Error('Provide 1–25 valid 64-character finding IDs.');
