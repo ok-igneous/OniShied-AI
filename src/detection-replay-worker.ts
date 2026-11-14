@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { config } from "./config.js";
-import { pool, withTenantTransaction } from "./database.js";
+import { authPool, pool, withTenantTransaction } from "./database.js";
 import { evaluateAndPersistAroundEvent } from "./detection-finding-store.js";
 import { securityEventSchema } from "./security-event.js";
 import { replayRetryDelayMs } from "./detection-replay-policy.js";
@@ -128,4 +128,5 @@ try {
   }
 } finally {
   await pool.end();
+  await authPool?.end();
 }
