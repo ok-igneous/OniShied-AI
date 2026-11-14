@@ -34,6 +34,21 @@ async function insertFindings(
              WHERE incoming.connector_id = f.episode_anchor_connector_id
                AND incoming.event_id = f.episode_anchor_event_id
           )
+          AND EXISTS (
+            SELECT 1
+              FROM onishield.security_events AS legacy_anchor
+              JOIN onishield.security_events AS trigger_event
+                ON trigger_event.tenant_id = legacy_anchor.tenant_id
+               AND trigger_event.connector_id = $7
+               AND trigger_event.event_id = $8
+             WHERE legacy_anchor.tenant_id = f.tenant_id
+               AND legacy_anchor.connector_id = f.episode_anchor_connector_id
+               AND legacy_anchor.event_id = f.episode_anchor_event_id
+               AND legacy_anchor.observed_at <= trigger_event.observed_at
+               AND legacy_anchor.observed_at >= trigger_event.observed_at -
+                 CASE WHEN f.rule_id = 'AUTH_FAILURE_BURST'
+                   THEN INTERVAL '5 minutes' ELSE INTERVAL '10 minutes' END
+          )
         ORDER BY f.created_at ASC, f.finding_id ASC
         LIMIT 1`,
       [tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
@@ -54,6 +69,8 @@ async function insertFindings(
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb)
        ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
+         episode_anchor_connector_id = EXCLUDED.episode_anchor_connector_id,
+         episode_anchor_event_id = EXCLUDED.episode_anchor_event_id,
          first_seen_at = LEAST(current_finding.first_seen_at, EXCLUDED.first_seen_at),
          last_seen_at = GREATEST(current_finding.last_seen_at, EXCLUDED.last_seen_at),
          evidence_event_refs = (
