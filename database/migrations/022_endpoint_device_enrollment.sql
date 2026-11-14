@@ -54,7 +54,7 @@ CREATE FUNCTION onishield.create_endpoint_enrollment_token(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,onishield AS $$
 DECLARE trusted RECORD; token_expiry TIMESTAMPTZ;
 BEGIN
-  IF p_session_hash !~ '^[a-f0-9]{64}
+  IF p_session_hash !~ '^[a-f0-9]{64}$' OR p_token_hash !~ '^[a-f0-9]{64}$' 
      OR length(btrim(COALESCE(p_display_name,''))) NOT BETWEEN 1 AND 120
      OR p_platform NOT IN ('windows','linux') THEN
     RAISE EXCEPTION 'Invalid endpoint enrollment request';
