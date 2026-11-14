@@ -42,7 +42,7 @@ At least one recovery copy must be outside the production administrative boundar
 - Separate backup administration from ordinary operator and application roles.
 - Encrypt in transit and at rest using managed or envelope-encryption keys.
 - Keep key-encryption keys separate from backup data and document break-glass recovery.
-- Rotate credentials and keys with a tested procedure; do not store keys beside the backups they protect.
+- Use a versioned backup keyring with one explicit active key ID for new artifacts and historical keys retained for every backup still inside retention or legal hold. Verification/restore must select the exact key ID from the authenticated manifest and fail closed when unavailable. Rotate through an approved secret-manager change; do not store keys beside the backups they protect.
 - Use immutable/WORM retention or equivalent object-lock controls where available.
 - Record backup ID, tenant/data scope, source database identity, start/end time, schema/migration version, encryption-key reference, size, checksum/manifest, and completion status.
 - Alert on missed, delayed, incomplete, unusually small, or integrity-failed backups.
@@ -106,7 +106,7 @@ Do not expose raw backup credentials or encryption material in the dashboard. Re
 - Tenant-isolation tests after full and tenant-scoped restore.
 - WAL/PITR recovery to selected timestamps.
 - Backup deletion/overwrite denial tests using production application credentials.
-- Key-loss and key-rotation recovery exercises.
+- Key-loss and key-rotation recovery exercises, including verification/restoration of backups under both the previous and new key IDs before any old key is retired.
 - Corruption, partial backup, missing WAL, unavailable provider, and compromised-admin simulations.
 - Measured RPO/RTO and documented recovery gaps.
 
@@ -114,4 +114,4 @@ A backup is not marked healthy solely because the provider reports upload succes
 
 ## 10. Initial implementation exclusions
 
-The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, archive verification, and guarded restore into a new empty isolated database. A separate S3-compatible uploader is authored to verify the local backup before transfer, require bucket versioning and Object Lock, apply COMPLIANCE retention, and verify remote metadata. The archive necessarily contains high-sensitivity database authentication verifiers and encrypted MFA secret material; the lab restore CLI revokes restored sessions, consumes pending one-time tokens, clears pending MFA enrollment, and invalidates unused MFA recovery codes before service startup. Neither the PostgreSQL CLI nor the cloud uploader has been executed against a real database or provider. There is no scheduler, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. See [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md) for the current lab workflow.
+The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, a versioned keyring with manifest-selected historical key resolution, archive verification, and guarded restore into a new empty isolated database. A separate S3-compatible uploader is authored to verify the local backup before transfer, require bucket versioning and Object Lock, apply COMPLIANCE retention, and verify remote metadata. The archive necessarily contains high-sensitivity database authentication verifiers and encrypted MFA secret material; the lab restore CLI revokes restored sessions, consumes pending one-time tokens, clears pending MFA enrollment, and invalidates unused MFA recovery codes before service startup. Neither the PostgreSQL CLI nor the cloud uploader has been executed against a real database or provider. There is no scheduler, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. See [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md) for the current lab workflow.
