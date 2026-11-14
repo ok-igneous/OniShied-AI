@@ -6,6 +6,39 @@ ALTER TABLE onishield.detection_findings
   ADD COLUMN evidence_event_refs JSONB NOT NULL DEFAULT '[]'::jsonb
   CHECK (jsonb_typeof(evidence_event_refs) = 'array');
 
+-- Backfill structured references from the legacy connector:event string only
+-- when each reference maps to exactly one canonical stored event.
+DO $
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM onishield.detection_findings AS f
+    CROSS JOIN LATERAL jsonb_array_elements_text(f.evidence_event_ids) AS ref(value)
+    WHERE (
+      SELECT COUNT(*)
+      FROM onishield.security_events AS e
+      WHERE e.tenant_id = f.tenant_id
+        AND e.connector_id || ':' || e.event_id = ref.value
+    ) <> 1
+  ) THEN
+    RAISE EXCEPTION
+      'Cannot backfill structured finding evidence: one or more legacy references are ambiguous or missing';
+  END IF;
+END;
+$;
+
+UPDATE onishield.detection_findings AS f
+SET evidence_event_refs = COALESCE((
+  SELECT jsonb_agg(jsonb_build_object(
+    'connector_id', e.connector_id,
+    'event_id', e.event_id
+  ) ORDER BY e.observed_at, e.connector_id, e.event_id)
+  FROM jsonb_array_elements_text(f.evidence_event_ids) AS ref(value)
+  JOIN onishield.security_events AS e
+    ON e.tenant_id = f.tenant_id
+   AND e.connector_id || ':' || e.event_id = ref.value
+), '[]'::jsonb);
+
 ALTER TABLE onishield.threat_indicator_matches
   ADD CONSTRAINT threat_matches_tenant_event_id_unique
   UNIQUE (tenant_id, connector_id, event_id, id);
