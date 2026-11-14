@@ -191,6 +191,8 @@ function mappedEventFields(data: Record<string, unknown>): EventField[] {
   const definitions: Array<{ key: string; type: IndicatorType }> = [
     { key: "source_ip", type: "ipv4" },
     { key: "source_ip", type: "ipv6" },
+    { key: "source_address", type: "ipv4" },
+    { key: "source_address", type: "ipv6" },
     { key: "destination_ip", type: "ipv4" },
     { key: "destination_ip", type: "ipv6" },
     { key: "domain", type: "domain" },
