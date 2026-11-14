@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test src/*.test.ts",
-    "check:lines": "node scripts/check-source-lines.mjs"
+    "check:lines": "node scripts/check-source-lines.mjs",
+    "test:backup": "node --test scripts/backup-crypto.test.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
