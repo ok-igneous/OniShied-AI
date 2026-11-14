@@ -23,6 +23,10 @@ function required(value, name) {
 
 function databaseIdentity(value) {
   const url = new URL(value);
+  if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.hostname ||
+      !url.pathname || url.pathname === "/") {
+    throw new Error("A valid PostgreSQL connection URL with a database name is required");
+  }
   return { host: url.hostname, port: url.port || "5432", database: decodeURIComponent(url.pathname.slice(1)) };
 }
 
@@ -105,8 +109,7 @@ async function createBackup() {
   });
   try {
     output.write(Buffer.concat([BACKUP_MAGIC, iv]));
-    await pipeline(child.stdout, cipher, output);
-    await exit;
+    await Promise.all([pipeline(child.stdout, cipher, output), exit]);
     await writeFile(temporaryPath, cipher.getAuthTag(), { flag: "a", mode: 0o600 });
     await rename(temporaryPath, artifactPath);
     const encryptedBytes = (await stat(artifactPath)).size;
@@ -161,8 +164,7 @@ async function validateArchive(artifactPath, info, iv, tag, encryptionKey) {
       `pg_restore archive validation failed: ${stderr.trim()}`
     )));
   });
-  await pipeline(ciphertext, decipher, child.stdin);
-  await exit;
+  await Promise.all([pipeline(ciphertext, decipher, child.stdin), exit]);
 }
 
 async function verifyBackup() {
