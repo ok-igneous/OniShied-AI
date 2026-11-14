@@ -1,6 +1,6 @@
 # Backup and Disaster Recovery — Technical Contract
 
-**Status:** Normative design contract; not implemented.  
+**Status:** Normative design contract; partial lab CLI authored on an unmerged branch and not verified.  
 **Initial deployment:** Disposable lab with synthetic data.  
 **Objective:** Recover OniShield service and customer security records after accidental deletion, corruption, infrastructure failure, ransomware, or compromised credentials.
 
@@ -114,4 +114,4 @@ A backup is not marked healthy solely because the provider reports upload succes
 
 ## 10. Initial implementation exclusions
 
-The initial lab does not provide a customer-facing backup dashboard, production backup scheduler, immutable cloud vault, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. Those remain implementation and operational release gates.
+The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, archive verification, and guarded restore into a new empty isolated database. It does not provide a customer-facing dashboard, scheduler, off-site/immutable vault, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. The CLI is authored but not executed; see [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md).
