@@ -1,4 +1,4 @@
--- Run as database administrator after migrations 001-020.
+-- Run as database administrator after migrations 001-021.
 -- Validates case isolation, analysis job leasing, immutable report persistence, and audit integrity.
 BEGIN;
 SET LOCAL ROLE onishield_owner;
@@ -44,7 +44,20 @@ VALUES
   repeat('b',64),NOW()+INTERVAL '1 hour',NOW());
 
 SET LOCAL ROLE onishield_auth;
-DO $$
+DO $
+DECLARE tenant_a_count INTEGER; tenant_b_count INTEGER;
+BEGIN
+  SELECT count(*) INTO tenant_a_count
+    FROM onishield.list_operator_detection_findings(repeat('a',64),50,NULL,NULL,NULL);
+  SELECT count(*) INTO tenant_b_count
+    FROM onishield.list_operator_detection_findings(repeat('b',64),50,NULL,NULL,NULL);
+  IF tenant_a_count <> 1 OR tenant_b_count <> 0 THEN
+    RAISE EXCEPTION 'Operator finding discovery leaked or omitted tenant data: A %, B %',
+      tenant_a_count, tenant_b_count;
+  END IF;
+END $;
+
+DO $
 DECLARE cid UUID; detail JSONB; inserted BOOLEAN;
 BEGIN
   cid := onishield.create_investigation_case(
