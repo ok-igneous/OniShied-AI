@@ -15,7 +15,7 @@ VALUES
 ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING;
 
 -- Initial threshold crossing creates an episode anchored to event-a.
-INSERT INTO onishield.detection_findings
+INSERT INTO onishield.detection_findings AS current_finding
   (tenant_id, finding_id, rule_id, rule_version, status, title, explanation,
    severity, confidence, first_seen_at, last_seen_at,
    episode_anchor_connector_id, episode_anchor_event_id,
@@ -47,27 +47,27 @@ VALUES
    '[{"connector_id":"connector-a","event_id":"event-b"}]'::jsonb,
    repeat('b', 64), '["later_evidence"]'::jsonb, '["synthetic_only"]'::jsonb)
 ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
-  first_seen_at = LEAST(detection_findings.first_seen_at, EXCLUDED.first_seen_at),
-  last_seen_at = GREATEST(detection_findings.last_seen_at, EXCLUDED.last_seen_at),
+  first_seen_at = LEAST(current_finding.first_seen_at, EXCLUDED.first_seen_at),
+  last_seen_at = GREATEST(current_finding.last_seen_at, EXCLUDED.last_seen_at),
   evidence_event_refs = (
     SELECT COALESCE(jsonb_agg(item ORDER BY item->>'connector_id', item->>'event_id'), '[]'::jsonb)
     FROM (
       SELECT DISTINCT item
-      FROM jsonb_array_elements(detection_findings.evidence_event_refs || EXCLUDED.evidence_event_refs) AS refs(item)
+      FROM jsonb_array_elements(current_finding.evidence_event_refs || EXCLUDED.evidence_event_refs) AS refs(item)
     ) AS merged
   ),
   evidence_event_ids = (
     SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
     FROM (
       SELECT DISTINCT item
-      FROM jsonb_array_elements_text(detection_findings.evidence_event_ids || EXCLUDED.evidence_event_ids) AS ids(item)
+      FROM jsonb_array_elements_text(current_finding.evidence_event_ids || EXCLUDED.evidence_event_ids) AS ids(item)
     ) AS merged
   ),
   matched_conditions = (
     SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
     FROM (
       SELECT DISTINCT item
-      FROM jsonb_array_elements_text(detection_findings.matched_conditions || EXCLUDED.matched_conditions) AS conditions(item)
+      FROM jsonb_array_elements_text(current_finding.matched_conditions || EXCLUDED.matched_conditions) AS conditions(item)
     ) AS merged
   ),
   updated_at = NOW();
