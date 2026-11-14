@@ -97,6 +97,8 @@ Every rule result should eventually conform to a versioned structure containing:
 - `severity` and separate `confidence`
 - `first_seen_at` and `last_seen_at`
 - `evidence_event_ids[]`
+- `evidence_event_refs[]` with explicit `connector_id` and `event_id` fields
+- `threat_intelligence_matches[]` as supporting context only, never response authorization
 - `grouping_key_hash` (avoid exposing raw sensitive identifiers in logs)
 - `matched_conditions[]`
 - `known_limitations[]`
