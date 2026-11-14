@@ -1,6 +1,6 @@
 # OniShield Repository Capability Audit
 
-**Audit date:** 2026-11-13  
+**Audit date:** 2026-11-14  
 **Repository:** `ok-igneous/OniShied-AI`  
 **Branch inspected:** `main`  
 **Scope:** Repository tree, TypeScript source, SQL migrations/tests, product contracts, package manifest and latest GitHub Actions run.  
@@ -50,7 +50,7 @@ A checked-in test file does not prove that the test passes. A migration file doe
 | TLP disclosure enforcement | **Partial** | A fail-closed policy evaluator and tests exist, but authenticated read/report/export endpoints and recipient membership enforcement are not wired to it. |
 | Automatic threat-feed ingestion / TAXII-STIX | **Missing** | Contracts explicitly defer automatic feeds and external feed integrations. |
 | Cross-tenant/global threat intelligence network | **Missing** | Current design is tenant-scoped; global sharing and customer-contributed intelligence are deferred. |
-| Deterministic detection engine and findings pipeline | **Design only** | `docs/DETECTION_SCENARIOS.md` specifies scenarios and tests, but no detection engine/finding implementation was found in `src/`. |
+| Deterministic authentication detections | **Partial — implemented in code, unverified** | `src/detection-engine.ts` implements two versioned rules; unit tests cover thresholds, tenant separation, replay ordering and evidence references. `src/detection-finding-store.ts` persists findings under RLS and re-evaluates a bounded +/-10-minute event neighborhood after ingestion. `GET /v1/findings` is connector-token authenticated. No passing CI/runtime verification, durable background replay, alert delivery, finding lifecycle/merging or production telemetry validation yet. |
 | AI investigation service | **Design only** | `docs/INVESTIGATION_ENGINE_CONTRACT.md` defines a read-only contract; no model provider/AI service implementation or AI SDK dependency was found in the inspected manifest/source tree. |
 | Evidence-linked security advisor | **Design only / missing UI** | Desired output is described in product docs; no implemented advisor service or user interface was found. |
 | Response action registry and executor | **Design only** | Contracts define narrow typed actions, authorization and audit; no response executor or endpoint action adapter was found. |
@@ -76,19 +76,23 @@ The repository's strongest implemented work is the control-plane/security founda
 
 These are meaningful building blocks. They are not equivalent to a deployed endpoint protection product or a SOC platform.
 
-### 3.2 Threat intelligence is not detection
+### 3.2 Deterministic detection is an early demonstrator, not a production pipeline
+
+Two authentication rules now exist: eight failures within five minutes for the same tenant/host/principal/source address, and five failures followed by success within ten minutes for the same tenant/host/principal. Findings include rule version, confidence/severity, matched conditions, limitations and connector-qualified evidence references. Ingestion triggers a bounded re-evaluation and findings are stored under tenant RLS. The query is capped at 5,000 events and only covers a +/-10-minute neighborhood around the ingested event; older late arrivals need a replay process. There is no alert delivery, finding lifecycle/merge model, streaming watermark, or successful CI/runtime proof. Treat this as an unverified first implementation, not a customer-ready detection service.
+
+### 3.3 Threat intelligence is not detection
 
 The matcher compares explicitly mapped event fields with active indicators. It does not establish malicious behavior by itself. The service is not wired into ingestion or a finding pipeline, and an indicator match must not authorize a response.
 
-### 3.3 Authentication is not a finished operator product
+### 3.4 Authentication is not a finished operator product
 
 The backend has substantial identity and MFA code. However, the current implementation status document records that operator routes are loopback-only and that frontend token pages, remote browser/mobile token transport, TLS/origin controls, device labels, secure client storage and production deployment review remain outstanding. Do not expose the current operator routes publicly as a finished service.
 
-### 3.4 Autopilot is not implemented
+### 3.5 Autopilot is not implemented
 
 The Autopilot contract is strong design documentation: default OFF, tenant opt-in, risk tiers, approval boundaries, fail-closed behavior, emergency pause and immutable execution intent. The repository does not yet contain the policy persistence, simulator, action registry or executor needed to make this feature work.
 
-### 3.5 Backup documentation is not a recovery capability
+### 3.6 Backup documentation is not a recovery capability
 
 The backup contract correctly requires isolated credentials, immutable/off-boundary copies, integrity verification, clean-room restore and measured RPO/RTO. No backup scheduler, vault integration, restore workflow or successful restore drill is present in the inspected tree. Do not accept production customer data on the assumption that recovery exists.
 
@@ -104,10 +108,10 @@ The repository has a CI workflow that intends to run:
 6. TypeScript type-check.
 7. Build.
 
-The latest run observed during this audit:
+The latest run observed during this update:
 
-- Workflow run: [#339](https://github.com/ok-igneous/OniShied-AI/actions/runs/43473225542)
-- Commit: `12a297a2ea9bb97673abbe93867285668622f67c`
+- Workflow run: [#359](https://github.com/ok-igneous/OniShied-AI/actions/runs/43569605423)
+- Commit: `3244d008280e520b2871b6cffab8bdbdf6998c9d`
 - Conclusion: **failure**
 - Job runner ID: `0`
 - Job steps: none
@@ -130,12 +134,14 @@ The following order minimizes the risk of building autonomy on top of an unverif
 
 **Do not add more complex product behavior while the current foundation cannot be continuously verified.**
 
-### P1 — Complete a narrow detection demonstrator
+### P1 — Verify and harden the first detection demonstrator
 
-- [ ] Verify authenticated event ingestion end-to-end against PostgreSQL.
-- [ ] Implement the first two deterministic scenarios from `DETECTION_SCENARIOS.md`: authentication failure burst and failure-followed-by-success.
-- [ ] Add versioned finding storage, evidence event IDs, severity/confidence separation and idempotency.
-- [ ] Test threshold boundaries, out-of-order events, duplicate replay, missing fields, cross-tenant isolation and benign cases.
+- [x] Implement the first two deterministic scenarios: authentication failure burst and failure-followed-by-success.
+- [x] Add versioned finding storage, tenant RLS, authenticated findings query, connector-qualified evidence references and exact-replay idempotency.
+- [x] Add unit tests for threshold boundaries, input ordering, duplicate event replay and tenant separation.
+- [ ] Restore CI execution and fix any real type, test, migration or build failures.
+- [ ] Add PostgreSQL integration tests for event-to-finding persistence and tenant isolation.
+- [ ] Add durable replay for late events outside the bounded request horizon, alert delivery, finding lifecycle/merging, and benign-event calibration.
 - [ ] Wire threat-indicator matches into finding enrichment without treating matches as proof or response authorization.
 
 ### P2 — Read-only investigation
