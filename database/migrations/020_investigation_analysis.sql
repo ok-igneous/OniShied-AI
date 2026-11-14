@@ -146,6 +146,10 @@ BEGIN
    WHERE c.tenant_id=session_row.tenant_id AND c.id=p_case_id
      AND c.status NOT IN ('resolved','closed') FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Investigation case not found or closed'; END IF;
+  IF (SELECT count(*) FROM onishield.investigation_case_findings a
+       WHERE a.tenant_id=session_row.tenant_id AND a.case_id=p_case_id) NOT BETWEEN 1 AND 25 THEN
+    RAISE EXCEPTION 'Investigation case exceeds supported analysis scope';
+  END IF;
   SELECT id INTO job FROM onishield.investigation_analysis_jobs
    WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
      AND status IN ('pending','processing') ORDER BY created_at DESC LIMIT 1;
@@ -380,8 +384,11 @@ BEGIN
   END IF;
   PERFORM set_config('app.tenant_id',session_row.tenant_id,true);
   SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r.version DESC),'[]'::jsonb)
-    INTO result FROM onishield.investigation_analysis_reports r
-   WHERE r.tenant_id=session_row.tenant_id AND r.case_id=p_case_id;
+    INTO result FROM (
+      SELECT * FROM onishield.investigation_analysis_reports r
+       WHERE r.tenant_id=session_row.tenant_id AND r.case_id=p_case_id
+       ORDER BY r.version DESC LIMIT 50
+    ) r;
   IF NOT EXISTS (SELECT 1 FROM onishield.investigation_cases c
     WHERE c.tenant_id=session_row.tenant_id AND c.id=p_case_id) THEN
     RAISE EXCEPTION 'Investigation case not found';
