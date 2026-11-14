@@ -27,6 +27,10 @@ const input = investigationAnalysisInputSchema.parse({
     last_seen_at: "2026-11-14T00:04:00.000Z",
     matched_conditions: ["threshold_met"],
     known_limitations: [],
+    threat_match_total_count: 0,
+    threat_matches_truncated: false,
+    evidence_total_count: 1,
+    evidence_truncated: false,
     threat_matches: [],
     evidence: [{
       connector_id: "connector-a",
