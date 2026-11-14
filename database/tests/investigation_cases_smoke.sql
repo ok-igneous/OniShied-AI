@@ -95,7 +95,7 @@ END $$;
 
 SET LOCAL ROLE onishield_auth;
 DO $
-DECLARE cid UUID; job UUID;
+DECLARE cid UUID; job UUID; duplicate_job UUID;
 BEGIN
   SELECT id INTO cid FROM onishield.investigation_cases
    WHERE tenant_id='investigation-tenant-a' AND title='Authentication activity review';
@@ -103,6 +103,10 @@ BEGIN
     repeat('a',64),cid,'investigation-analysis-smoke-request'
   );
   IF job IS NULL THEN RAISE EXCEPTION 'Analysis request did not create or return a job'; END IF;
+  duplicate_job := onishield.request_investigation_analysis(
+    repeat('a',64),cid,'investigation-analysis-smoke-duplicate-request'
+  );
+  IF duplicate_job <> job THEN RAISE EXCEPTION 'Duplicate active analysis request created a second job'; END IF;
 END $;
 
 SET LOCAL ROLE onishield_app;
