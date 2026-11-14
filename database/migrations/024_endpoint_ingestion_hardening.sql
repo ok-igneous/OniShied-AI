@@ -110,7 +110,7 @@ END; $$;
 
 ALTER TABLE onishield.endpoint_telemetry_events
   ADD CONSTRAINT endpoint_telemetry_event_schema_check
-  CHECK (onishield.endpoint_telemetry_event_is_valid(event_json));
+  CHECK (onishield.endpoint_telemetry_event_is_valid(event_json) IS TRUE);
 
 -- Durable per-agent event-rate budget. A failed transaction cannot consume
 -- quota; successful and duplicate insert attempts are counted at the DB edge.
