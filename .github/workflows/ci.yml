@@ -103,6 +103,9 @@ jobs:
       - name: Run schema tests
         run: npm test
 
+      - name: Test backup encryption and manifest authentication
+        run: npm run test:backup
+
       - name: Type-check
         run: npm run typecheck
 
