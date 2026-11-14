@@ -125,6 +125,25 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='missing agent identity was accepted' THEN RAISE; END IF;
   END;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object('sequence',1.5))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'fractional sequence was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='fractional sequence was accepted' THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM * FROM onishield.ingest_endpoint_telemetry(
+      repeat('c',64),(SELECT jsonb_build_array(event || jsonb_build_object(
+        'collected_at',(event->>'observed_at')::TIMESTAMPTZ-INTERVAL '6 minutes'))
+        FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+    );
+    RAISE EXCEPTION 'collection time outside allowed skew was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='collection time outside allowed skew was accepted' THEN RAISE; END IF;
+  END;
 END $;
 
 SELECT onishield.revoke_endpoint_agent(
