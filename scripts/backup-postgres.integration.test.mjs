@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -126,7 +126,7 @@ test("PostgreSQL backup created before key rotation remains verifiable and resto
 
     // New backups must use the new active key while old backups remain recoverable.
     const newFiles = backupFiles(await cli("create", null, rotatedKeyring));
-    const newManifest = JSON.parse(await (await import("node:fs/promises")).readFile(
+    const newManifest = JSON.parse(await readFile(
       path.join(backupDirectory, newFiles.manifest), "utf8"
     ));
     assert.equal(newManifest.key_id, newKeyId);
