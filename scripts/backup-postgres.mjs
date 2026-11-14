@@ -31,7 +31,32 @@ function databaseIdentity(value) {
 }
 
 function localHost(host) {
-  return ["localhost", "127.0.0.1", "::1"].includes(host);
+  return ["localhost", "127.0.0.1", "::1"].includes(host.replace(/^\\[|\\]$/g, "").toLowerCase());
+}
+
+function postgresEnvironment(connectionUrl) {
+  const url = new URL(connectionUrl);
+  const host = url.hostname.replace(/^\\[|\\]$/g, "");
+  const env = { ...process.env };
+  env.PGHOST = host;
+  env.PGPORT = url.port || "5432";
+  env.PGDATABASE = decodeURIComponent(url.pathname.slice(1));
+  if (url.username) env.PGUSER = decodeURIComponent(url.username);
+  if (url.password) env.PGPASSWORD = decodeURIComponent(url.password);
+  const mappings = {
+    sslmode: "PGSSLMODE",
+    sslrootcert: "PGSSLROOTCERT",
+    sslcert: "PGSSLCERT",
+    sslkey: "PGSSLKEY",
+    application_name: "PGAPPNAME",
+    connect_timeout: "PGCONNECT_TIMEOUT",
+    options: "PGOPTIONS",
+    target_session_attrs: "PGTARGETSESSIONATTRS"
+  };
+  for (const [parameter, variable] of Object.entries(mappings)) {
+    if (url.searchParams.has(parameter)) env[variable] = url.searchParams.get(parameter);
+  }
+  return env;
 }
 
 
@@ -97,7 +122,7 @@ async function createBackup() {
   const cipher = createBackupCipher(keys.encryptionKey, iv);
   const output = createWriteStream(temporaryPath, { mode: 0o600, flags: "wx" });
   const child = spawn("pg_dump", ["--no-password", "--format=custom", "--no-owner", "--no-acl"], {
-    env: { ...process.env, PGDATABASE: databaseUrl },
+    env: postgresEnvironment(databaseUrl),
     stdio: ["ignore", "pipe", "pipe"]
   });
   let stderr = "";
@@ -211,7 +236,7 @@ async function restoreBackup() {
   const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
   const child = spawn("pg_restore", [
     "--no-password", "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
-  ], { env: { ...process.env, PGDATABASE: targetUrl }, stdio: ["pipe", "ignore", "pipe"] });
+  ], { env: postgresEnvironment(targetUrl), stdio: ["pipe", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
