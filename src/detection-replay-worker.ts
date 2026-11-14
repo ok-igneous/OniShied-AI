@@ -31,8 +31,8 @@ async function claimOne(): Promise<ClaimedJob | null> {
               OR (j.status = 'processing' AND j.lease_until < NOW())
             )
           ORDER BY j.available_at ASC, j.id ASC
-          FOR UPDATE SKIP LOCKED
           LIMIT 1
+          FOR UPDATE SKIP LOCKED
        )
        UPDATE onishield.detection_replay_jobs AS j
           SET status = 'processing',
