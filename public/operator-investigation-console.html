@@ -5,7 +5,7 @@
 <meta name="referrer" content="no-referrer"><title>OniShield | Investigation Console</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--line:#26364e;--muted:#9aabc2;--ink:#edf3fb;--accent:#72b7ff;--danger:#ff8585;--ok:#7bd9ae}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:20px;margin:0}h2{font-size:17px;margin:0 0 12px}main{max-width:1200px;margin:auto;padding:20px;display:grid;gap:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px}.cases{display:grid;gap:8px;max-height:65vh;overflow:auto}.case{background:#0d1728;border:1px solid var(--line);border-radius:8px;padding:11px;text-align:left;color:var(--ink);cursor:pointer}.case[aria-current=true]{border-color:var(--accent)}button,input,textarea{font:inherit}button{background:#1c3858;border:1px solid #345a80;color:white;border-radius:8px;padding:9px 12px;cursor:pointer}button.secondary{background:#172337}button:disabled{opacity:.45;cursor:not-allowed}input,textarea{background:#0b1424;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:10px;width:100%}textarea{min-height:80px;resize:vertical}.muted,small{color:var(--muted)}.status{padding:8px 10px;border-radius:8px;background:#0b1424;color:var(--muted);white-space:pre-wrap}.danger{color:var(--danger)}.good{color:var(--ok)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1424;padding:12px;border-radius:8px;max-height:440px;overflow:auto}.stack{display:grid;gap:12px}.hidden{display:none}.pill{border:1px solid var(--line);padding:2px 7px;border-radius:99px;font-size:12px;color:var(--muted)}@media(max-width:760px){.layout{grid-template-columns:1fr}.cases{max-height:260px}header{align-items:flex-start;flex-direction:column}main{padding:12px}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:20px;margin:0}h2{font-size:17px;margin:0 0 12px}main{max-width:1200px;margin:auto;padding:20px;display:grid;gap:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px}.cases{display:grid;gap:8px;max-height:65vh;overflow:auto}.case{background:#0d1728;border:1px solid var(--line);border-radius:8px;padding:11px;text-align:left;color:var(--ink);cursor:pointer}.case[aria-current=true]{border-color:var(--accent)}button,input,textarea,select{font:inherit}button{background:#1c3858;border:1px solid #345a80;color:white;border-radius:8px;padding:9px 12px;cursor:pointer}button.secondary{background:#172337}button:disabled{opacity:.45;cursor:not-allowed}input,textarea,select{background:#0b1424;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:10px;width:100%}textarea{min-height:80px;resize:vertical}.muted,small{color:var(--muted)}.status{padding:8px 10px;border-radius:8px;background:#0b1424;color:var(--muted);white-space:pre-wrap}.danger{color:var(--danger)}.good{color:var(--ok)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1424;padding:12px;border-radius:8px;max-height:440px;overflow:auto}.stack{display:grid;gap:12px}.hidden{display:none}.pill{border:1px solid var(--line);padding:2px 7px;border-radius:99px;font-size:12px;color:var(--muted)}@media(max-width:760px){.layout{grid-template-columns:1fr}.cases{max-height:260px}header{align-items:flex-start;flex-direction:column}main{padding:12px}}
 </style></head>
 <body>
 <header><div><h1>OniShield Investigation Console</h1><small>Operator-only • advisory AI analysis • human approval required</small></div><span class="pill">Early access</span></header>
@@ -16,7 +16,14 @@
 <div id="status" class="status" role="status" aria-live="polite">Not connected.</div>
 </section>
 <section class="layout">
-<aside class="panel stack"><div class="bar"><h2 style="margin:0;flex:1">Investigation cases</h2><button class="secondary" id="refresh">Refresh</button></div><div id="cases" class="cases"><p class="muted">Connect to load cases.</p></div></aside>
+<aside class="panel stack"><div class="bar"><h2 style="margin:0;flex:1">Investigation cases</h2><button class="secondary" id="refresh">Refresh</button></div><div id="cases" class="cases"><p class="muted">Connect to load cases.</p></div>
+<div class="stack" style="border-top:1px solid var(--line);padding-top:14px">
+<h2>Create case from findings</h2>
+<input id="newCaseTitle" maxlength="160" placeholder="Case title">
+<textarea id="newCaseFindingIds" placeholder="Finding IDs (one per line or comma-separated; maximum 25)"></textarea>
+<textarea id="newCaseReason" maxlength="1000" placeholder="Why should these findings be investigated? (10–1000 characters)"></textarea>
+<button id="createCase">Create investigation case</button>
+</div></aside>
 <section class="panel stack"><div class="bar"><h2 style="flex:1">Case workspace</h2><span id="caseStatus" class="pill">No case selected</span></div>
 <div id="empty" class="muted">Select a case to inspect findings, evidence and activity.</div>
 <div id="workspace" class="stack hidden">
@@ -26,6 +33,17 @@
 <div><h2>Investigation report</h2><pre id="reports">No reports loaded.</pre></div>
 <div><h2>Findings and evidence</h2><pre id="findings">Loading…</pre></div>
 <div><h2>Activity timeline</h2><pre id="activity">Loading…</pre></div>
+<div class="stack"><h2>Associate another finding</h2>
+<input id="associateFindingId" maxlength="64" placeholder="64-character finding ID">
+<textarea id="associateFindingReason" maxlength="1000" placeholder="Reason for associating this finding (10–1000 characters)"></textarea>
+<div><button id="associateFinding">Associate finding</button></div></div>
+<div class="stack"><h2>Update finding status</h2>
+<input id="transitionFindingId" maxlength="64" placeholder="64-character finding ID">
+<select id="transitionStatus"><option value="acknowledged">Acknowledged</option><option value="investigating">Investigating</option><option value="resolved">Resolved</option><option value="reopened">Reopened</option><option value="suppressed">Suppressed</option></select>
+<textarea id="transitionReason" maxlength="1000" placeholder="Reason for this status transition (10–1000 characters)"></textarea>
+<div><button id="transitionFinding">Apply status transition</button></div>
+<p class="muted">Finding transitions require the operator's recent step-up authentication. If the API returns 428, complete step-up authentication before retrying.</p>
+</div>
 <div class="stack"><h2>Add analyst note</h2><textarea id="note" maxlength="2000" placeholder="Record a factual investigation note (10–2000 characters)."></textarea><div><button id="saveNote">Save note</button></div></div>
 </div></section></section>
 </main>
@@ -42,6 +60,33 @@ async function act(fn){try{await fn();say('Action completed.')}catch(e){say(e.me
 $('connect').onclick=()=>act(async()=>{const value=$('token').value.trim();if(!value)throw Error('Enter an operator session token.');token=value;await loadCases();sessionStorage.setItem('onishield_operator_session',token);connected(true);say('Connected. Session token is held in this tab only.')});
 $('disconnect').onclick=()=>{token='';selected='';sessionStorage.removeItem('onishield_operator_session');$('token').value='';connected(false);$('cases').replaceChildren();$('workspace').classList.add('hidden');$('empty').classList.remove('hidden');say('Disconnected. Session token cleared.')};
 $('refresh').onclick=()=>act(loadCases);
+$('createCase').onclick=()=>act(async()=>{
+ const title=$('newCaseTitle').value.trim();
+ const findingIds=$('newCaseFindingIds').value.split(/[\\s,]+/).filter(Boolean);
+ const reason=$('newCaseReason').value.trim();
+ if(title.length<3||title.length>160)throw Error('Case title must be 3–160 characters.');
+ if(findingIds.length<1||findingIds.length>25||findingIds.some(id=>! /^[a-f0-9]{64}$/.test(id)))throw Error('Provide 1–25 valid 64-character finding IDs.');
+ if(reason.length<10||reason.length>1000)throw Error('Case reason must be 10–1000 characters.');
+ const result=await api('/v1/operator/investigations',{method:'POST',body:JSON.stringify({title,findingIds,reason})});
+ if(!result.caseId)throw Error('The server did not return a case ID.');
+ $('newCaseTitle').value='';$('newCaseFindingIds').value='';$('newCaseReason').value='';
+ await loadCases();await openCase(result.caseId);
+});
+$('associateFinding').onclick=()=>act(async()=>{
+ if(!selected)throw Error('Select a case first.');
+ const findingId=$('associateFindingId').value.trim(),reason=$('associateFindingReason').value.trim();
+ if(!/^[a-f0-9]{64}$/.test(findingId))throw Error('Enter a valid 64-character finding ID.');
+ if(reason.length<10||reason.length>1000)throw Error('Association reason must be 10–1000 characters.');
+ await api('/v1/operator/investigations/'+encodeURIComponent(selected)+'/findings',{method:'POST',body:JSON.stringify({findingId,reason})});
+ $('associateFindingId').value='';$('associateFindingReason').value='';await openCase(selected);
+});
+$('transitionFinding').onclick=()=>act(async()=>{
+ const findingId=$('transitionFindingId').value.trim(),status=$('transitionStatus').value,reason=$('transitionReason').value.trim();
+ if(!/^[a-f0-9]{64}$/.test(findingId))throw Error('Enter a valid 64-character finding ID.');
+ if(reason.length<10||reason.length>1000)throw Error('Transition reason must be 10–1000 characters.');
+ await api('/v1/operator/findings/'+encodeURIComponent(findingId)+'/transition',{method:'POST',body:JSON.stringify({status,reason})});
+ $('transitionFindingId').value='';$('transitionReason').value='';if(selected)await openCase(selected);
+});
 $('analyze').onclick=()=>act(async()=>{if(!selected)throw Error('Select a case.');const result=await api('/v1/operator/investigations/'+selected+'/analyze',{method:'POST',body:'{}'});$('analysisStatus').textContent=pretty(result);});
 $('checkAnalysis').onclick=()=>act(async()=>{const result=await api('/v1/operator/investigations/'+selected+'/analysis-status');$('analysisStatus').textContent=pretty(result.analysis)});
 $('loadReports').onclick=()=>act(async()=>{const result=await api('/v1/operator/investigations/'+selected+'/reports');$('reports').textContent=pretty(result.reports||[])});
