@@ -16,6 +16,25 @@ pool.on("error", (error) => {
   console.error("Unexpected idle PostgreSQL client error", error);
 });
 
+/**
+ * Endpoint credentials have a separate database identity. This pool is never
+ * substituted with the operator-auth or general application pool.
+ */
+export const endpointIngestionPool = config.endpointIngestDatabaseUrl
+  ? new Pool({
+      connectionString: config.endpointIngestDatabaseUrl,
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 5_000,
+      application_name: "onishield-endpoint-ingestion",
+      ...(config.databaseSsl ? { ssl: { rejectUnauthorized: true } } : {})
+    })
+  : null;
+
+endpointIngestionPool?.on("error", (error) => {
+  console.error("Unexpected idle endpoint-ingestion PostgreSQL client error", error);
+});
+
 export async function withTenantTransaction<T>(
   tenantId: string,
   operation: (client: pg.PoolClient) => Promise<T>
