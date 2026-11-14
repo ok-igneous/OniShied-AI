@@ -37,7 +37,7 @@
 
 ## Verification status
 
-**Not verified yet.** The latest workflow run associated with the current backup branch completed with failure and reported zero executed steps. The job-step endpoint returned an empty list and the workflow-log endpoint was unavailable, so the precise failure cause is unconfirmed. Do not attribute it to billing or runner allocation without fresh GitHub annotations. No passing claim is made for migrations, PostgreSQL RLS tests, unit tests, type-checking, build, or backup/restore integration.
+**Not verified yet.** The latest observed workflow run for a commit on this backup branch completed with failure and reported zero executed steps. No workflow run was returned for the current branch head. The job-step endpoint returned an empty list and the prior workflow-log endpoint was unavailable, so the precise failure cause is unconfirmed. Do not attribute it to billing or runner allocation without fresh GitHub annotations. No passing claim is made for migrations, PostgreSQL RLS tests, unit tests, type-checking, build, or backup/restore integration.
 
 A successful CI run must be observed before treating the database controls or application code as validated. The owner must resolve the GitHub account billing restriction under GitHub **Settings → Billing & plans**; making the repository public does not bypass this account-level restriction.
 
