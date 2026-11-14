@@ -179,6 +179,26 @@ export function validateInvestigationReport(report: InvestigationReport, input: 
   }
 }
 
+export function enforceInvestigationInputLimitations(
+  report: InvestigationReport,
+  input: InvestigationAnalysisInput
+): InvestigationReport {
+  const required = new Set<string>();
+  if (input.findings.some((finding) => finding.evidence_truncated)) {
+    required.add("The evidence package was truncated to a bounded subset. Conclusions may change when omitted evidence is reviewed.");
+  }
+  if (input.findings.some((finding) => finding.threat_matches_withheld_count > 0)) {
+    required.add("Some threat-intelligence matches were withheld because their TLP classification was not CLEAR. The external analysis did not receive those indicators.");
+  }
+  if (input.findings.some((finding) => finding.threat_matches_truncated)) {
+    required.add("The threat-intelligence match list is partial because of disclosure or result limits. An omitted match must not be interpreted as evidence that no other indicator matched.");
+  }
+  const mandatory = [...required];
+  const optional = report.limitations.filter((limitation) => !required.has(limitation));
+  const retainedOptional = optional.slice(0, Math.max(0, 30 - mandatory.length));
+  return { ...report, limitations: [...retainedOptional, ...mandatory] };
+}
+
 function extractOutputText(response: unknown): string {
   if (!response || typeof response !== "object") throw new Error("openai_response_invalid");
   const data = response as { status?: string; output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; refusal?: string }> }> };
@@ -248,7 +268,8 @@ export async function generateInvestigationReport(
   if (!response.ok) {
     throw new Error(`openai_api_http_${response.status}`);
   }
-  const report = investigationReportSchema.parse(JSON.parse(extractOutputText(await response.json())));
+  const parsedReport = investigationReportSchema.parse(JSON.parse(extractOutputText(await response.json())));
+  const report = enforceInvestigationInputLimitations(parsedReport, input);
   validateInvestigationReport(report, input);
   return { report, evidenceDigest: investigationEvidenceDigest(input) };
 }

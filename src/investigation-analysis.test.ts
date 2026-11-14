@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   investigationAnalysisInputSchema,
   investigationEvidenceDigest,
+  enforceInvestigationInputLimitations,
   validateInvestigationReport
 } from "./investigation-analysis.js";
 
@@ -102,4 +103,56 @@ test("evidence digest is stable for equivalent object key order", () => {
   assert.equal(investigationEvidenceDigest(input), investigationEvidenceDigest(
     investigationAnalysisInputSchema.parse(reordered)
   ));
+});
+
+test("forces explicit disclosure when evidence and threat-intelligence inputs are partial", () => {
+  const limitedInput = investigationAnalysisInputSchema.parse({
+    ...input,
+    findings: input.findings.map((finding) => ({
+      ...finding,
+      evidence_truncated: true,
+      threat_matches_truncated: true,
+      threat_matches_withheld_count: 2
+    }))
+  });
+  const enforced = enforceInvestigationInputLimitations(report, limitedInput);
+  assert.ok(enforced.limitations.some((item) => item.includes("evidence package was truncated")));
+  assert.ok(enforced.limitations.some((item) => item.includes("TLP classification was not CLEAR")));
+  assert.ok(enforced.limitations.some((item) => item.includes("threat-intelligence match list is partial")));
+});
+
+test("does not add partial-evidence warnings when the supplied package is complete", () => {
+  const enforced = enforceInvestigationInputLimitations(report, input);
+  assert.deepEqual(enforced.limitations, report.limitations);
+});
+
+test("does not duplicate mandatory limitation disclosures already returned by the model", () => {
+  const limitedInput = investigationAnalysisInputSchema.parse({
+    ...input,
+    findings: input.findings.map((finding) => ({ ...finding, evidence_truncated: true }))
+  });
+  const first = enforceInvestigationInputLimitations(report, limitedInput);
+  const second = enforceInvestigationInputLimitations(first, limitedInput);
+  assert.equal(
+    second.limitations.filter((item) => item.includes("evidence package was truncated")).length,
+    1
+  );
+});
+
+test("reserves report limitation capacity for all mandatory evidence warnings", () => {
+  const limitedInput = investigationAnalysisInputSchema.parse({
+    ...input,
+    findings: input.findings.map((finding) => ({
+      ...finding,
+      evidence_truncated: true,
+      threat_matches_truncated: true,
+      threat_matches_withheld_count: 1
+    }))
+  });
+  const crowdedReport = { ...report, limitations: Array.from({ length: 30 }, (_, index) => `model limitation ${index}`) };
+  const enforced = enforceInvestigationInputLimitations(crowdedReport, limitedInput);
+  assert.equal(enforced.limitations.length, 30);
+  assert.ok(enforced.limitations.some((item) => item.includes("evidence package was truncated")));
+  assert.ok(enforced.limitations.some((item) => item.includes("TLP classification was not CLEAR")));
+  assert.ok(enforced.limitations.some((item) => item.includes("threat-intelligence match list is partial")));
 });
