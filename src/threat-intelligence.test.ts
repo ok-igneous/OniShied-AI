@@ -107,6 +107,7 @@ test("rejects control characters, surrounding whitespace, and oversized values",
 
 test("matches only explicitly mapped event fields using exact normalized values", () => {
   const matches = matchThreatIndicators({
+    connectorId: "connector-1",
     eventId: "event-1",
     data: { source_ip: "192.0.2.44", domain: "EVIL.TEST." },
     indicators: [
@@ -140,6 +141,7 @@ test("does not match pending, expired, revoked, rejected, future, or expired-by-
 
   assert.deepEqual(
     matchThreatIndicators({
+      connectorId: "connector-1",
       eventId: "event-2",
       data: { domain: "evil.test" },
       indicators: states,
@@ -152,6 +154,7 @@ test("does not match pending, expired, revoked, rejected, future, or expired-by-
 test("does not recursively inspect arbitrary event properties", () => {
   assert.deepEqual(
     matchThreatIndicators({
+      connectorId: "connector-1",
       eventId: "event-3",
       data: { nested: { domain: "evil.test" }, notes: "evil.test" },
       indicators: [indicator()],
@@ -165,6 +168,7 @@ test("deduplicates repeated indicator records by indicator version and evidence 
   const first = indicator();
   const duplicate = indicator();
   const matches = matchThreatIndicators({
+    connectorId: "connector-1",
     eventId: "event-4",
     data: { domain: "evil.test" },
     indicators: [first, duplicate],
@@ -177,6 +181,7 @@ test("deduplicates repeated indicator records by indicator version and evidence 
 test("rejects oversized candidate sets and invalid event identifiers", () => {
   assert.throws(
     () => matchThreatIndicators({
+      connectorId: "connector-1",
       eventId: "event-limit",
       data: {},
       indicators: Array.from({ length: 10_001 }, (_, index) =>
@@ -188,6 +193,7 @@ test("rejects oversized candidate sets and invalid event identifiers", () => {
   );
   assert.throws(
     () => matchThreatIndicators({
+      connectorId: "connector-1",
       eventId: "",
       data: {},
       indicators: [],
