@@ -1,4 +1,22 @@
 -- Run after migrations 001-024 in a disposable database as onishield_owner.
+DO $ingestion_role_smoke$
+BEGIN
+  IF NOT has_schema_privilege('onishield_ingest','onishield','USAGE')
+     OR NOT has_function_privilege('onishield_ingest',
+       'onishield.ingest_endpoint_telemetry(text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'dedicated ingestion role is missing required function access';
+  END IF;
+  IF has_function_privilege('onishield_auth',
+       'onishield.ingest_endpoint_telemetry(text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'operator-auth role can invoke endpoint ingestion';
+  END IF;
+  IF has_table_privilege('onishield_ingest','onishield.endpoint_agents','SELECT')
+     OR has_table_privilege('onishield_ingest','onishield.endpoint_telemetry_events','SELECT')
+     OR has_table_privilege('onishield_ingest','onishield.security_events','SELECT') THEN
+    RAISE EXCEPTION 'dedicated ingestion role has direct table read access';
+  END IF;
+END $ingestion_role_smoke$;
+
 BEGIN;
 INSERT INTO onishield.operators(email,password_hash,display_name,status)
 VALUES ('endpoint-telemetry-smoke@example.invalid','test-only-not-a-real-password-hash','Endpoint Telemetry Smoke','active');
