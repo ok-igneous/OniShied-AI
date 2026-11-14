@@ -153,4 +153,72 @@ $$;
 REVOKE ALL ON FUNCTION onishield.transition_detection_finding(TEXT,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.transition_detection_finding(TEXT,TEXT,TEXT,TEXT,TEXT) TO onishield_auth;
 
+
+CREATE FUNCTION onishield.list_detection_finding_status_audit(
+  p_token_hash TEXT,
+  p_finding_id TEXT
+) RETURNS TABLE(
+  finding_id TEXT,
+  previous_status TEXT,
+  new_status TEXT,
+  reason TEXT,
+  request_id TEXT,
+  actor_operator_id UUID,
+  actor_display_name TEXT,
+  changed_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, onishield
+AS $$
+DECLARE
+  trusted_session RECORD;
+BEGIN
+  IF p_token_hash !~ '^[a-f0-9]{64}$'
+     OR p_finding_id !~ '^[a-f0-9]{64}$' THEN
+    RAISE EXCEPTION 'Invalid finding history request';
+  END IF;
+
+  SELECT s.tenant_id, s.operator_id, m.role
+    INTO trusted_session
+    FROM onishield.operator_sessions AS s
+    JOIN onishield.operators AS o ON o.id = s.operator_id
+    JOIN onishield.operator_memberships AS m
+      ON m.id = s.membership_id
+     AND m.tenant_id = s.tenant_id
+     AND m.operator_id = s.operator_id
+   WHERE s.token_hash = p_token_hash
+     AND s.revoked_at IS NULL
+     AND s.expires_at > NOW()
+     AND o.status = 'active'
+     AND m.status = 'active';
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized finding history request'; END IF;
+  IF trusted_session.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
+    RAISE EXCEPTION 'Unauthorized finding history request';
+  END IF;
+
+  PERFORM set_config('app.tenant_id', trusted_session.tenant_id, true);
+  IF NOT EXISTS (
+    SELECT 1 FROM onishield.detection_findings AS f
+     WHERE f.tenant_id = trusted_session.tenant_id
+       AND f.finding_id = p_finding_id
+  ) THEN
+    RAISE EXCEPTION 'Detection finding not found';
+  END IF;
+
+  RETURN QUERY
+    SELECT a.finding_id, a.previous_status, a.new_status, a.reason,
+           a.request_id, a.actor_operator_id, actor.display_name, a.changed_at
+      FROM onishield.detection_finding_status_audit AS a
+      JOIN onishield.operators AS actor ON actor.id = a.actor_operator_id
+     WHERE a.tenant_id = trusted_session.tenant_id
+       AND a.finding_id = p_finding_id
+     ORDER BY a.changed_at ASC, a.id ASC;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION onishield.list_detection_finding_status_audit(TEXT,TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.list_detection_finding_status_audit(TEXT,TEXT) TO onishield_auth;
+
 COMMIT;
