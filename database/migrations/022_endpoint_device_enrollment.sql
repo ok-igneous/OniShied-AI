@@ -1,3 +1,5 @@
+BEGIN;
+
 -- One-time, tenant-bound endpoint enrollment and per-device credential lifecycle.
 CREATE TABLE onishield.endpoint_agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -157,3 +159,5 @@ REVOKE ALL ON FUNCTION onishield.revoke_endpoint_agent(TEXT,UUID,TEXT) FROM PUBL
 GRANT EXECUTE ON FUNCTION onishield.create_endpoint_enrollment_token(TEXT,TEXT,TEXT,TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.claim_endpoint_enrollment(TEXT,TEXT,TEXT,TEXT,TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.revoke_endpoint_agent(TEXT,UUID,TEXT) TO onishield_auth;
+
+COMMIT;
