@@ -138,16 +138,21 @@ function refKey(ref: z.infer<typeof eventRefSchema>): string {
   return JSON.stringify([ref.connector_id, ref.event_id]);
 }
 
-function assertCitationsAreGrounded(report: InvestigationReport, input: InvestigationAnalysisInput): void {
-  const allowed = new Set(input.findings.flatMap((finding) => finding.evidence.map(refKey)));
+export function validateInvestigationReport(report: InvestigationReport, input: InvestigationAnalysisInput): void {
+  const evidence = new Map(input.findings.flatMap((finding) =>
+    finding.evidence.map((event) => [refKey(event), event.observed_at] as const)
+  ));
   const citations = [
     ...report.summary_evidence_refs,
     ...report.timeline.map((item) => item.event_ref),
     ...report.hypotheses.flatMap((item) => [...item.supporting_refs, ...item.contradicting_refs]),
     ...report.recommendations.flatMap((item) => item.evidence_refs)
   ];
-  if (citations.some((citation) => !allowed.has(refKey(citation)))) {
+  if (citations.some((citation) => !evidence.has(refKey(citation)))) {
     throw new Error("investigation_report_contains_ungrounded_evidence_reference");
+  }
+  if (report.timeline.some((item) => evidence.get(refKey(item.event_ref)) !== item.observed_at)) {
+    throw new Error("investigation_report_contains_ungrounded_timeline_timestamp");
   }
   if (report.recommendations.some((item) => item.human_approval_required !== true)) {
     throw new Error("investigation_report_contains_unauthorized_action");
@@ -225,6 +230,6 @@ export async function generateInvestigationReport(
     throw new Error(`openai_api_http_${response.status}:${diagnostic}`);
   }
   const report = investigationReportSchema.parse(JSON.parse(extractOutputText(await response.json())));
-  assertCitationsAreGrounded(report, input);
+  validateInvestigationReport(report, input);
   return { report, evidenceDigest: investigationEvidenceDigest(input) };
 }
