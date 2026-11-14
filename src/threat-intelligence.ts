@@ -29,6 +29,7 @@ export interface ThreatIndicator {
 }
 
 export interface IndicatorMatch {
+  connector_id: string;
   event_id: string;
   indicator_id: string;
   indicator_version: number;
@@ -206,6 +207,7 @@ function mappedEventFields(data: Record<string, unknown>): EventField[] {
 }
 
 export function matchThreatIndicators(input: {
+  connectorId: string;
   eventId: string;
   data: Record<string, unknown>;
   indicators: readonly ThreatIndicator[];
@@ -215,6 +217,9 @@ export function matchThreatIndicators(input: {
   const now = input.now ?? new Date();
   if (input.indicators.length > MAX_MATCH_CANDIDATES) {
     throw new IndicatorValidationError("Indicator candidate limit exceeded");
+  }
+  if (!input.connectorId || input.connectorId.length > 128) {
+    throw new IndicatorValidationError('A valid connector ID is required');
   }
   if (!input.eventId || input.eventId.length > 128) {
     throw new IndicatorValidationError('A valid event ID is required');
@@ -273,6 +278,7 @@ export function matchThreatIndicators(input: {
       ].join(":");
 
       matches.set(dedupeKey, {
+        connector_id: input.connectorId,
         event_id: input.eventId,
         indicator_id: indicator.id,
         indicator_version: indicator.version,
