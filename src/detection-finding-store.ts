@@ -15,20 +15,52 @@ async function insertFindings(
     if (finding.tenant_id !== tenantId) {
       throw new Error("Finding tenant does not match transaction tenant");
     }
-    const result = await client.query(
+    const result = await client.query<{ inserted: boolean }>(
       `INSERT INTO onishield.detection_findings
         (tenant_id, finding_id, rule_id, rule_version, status, title,
          explanation, severity, confidence, first_seen_at, last_seen_at,
+         episode_anchor_connector_id, episode_anchor_event_id,
          evidence_event_ids, evidence_event_refs, grouping_key_hash,
          matched_conditions, known_limitations)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               $12::jsonb, $13::jsonb, $14, $15::jsonb, $16::jsonb)
-       ON CONFLICT (tenant_id, finding_id) DO NOTHING
-       RETURNING id`,
+               $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb)
+       ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
+         first_seen_at = LEAST(onishield.detection_findings.first_seen_at, EXCLUDED.first_seen_at),
+         last_seen_at = GREATEST(onishield.detection_findings.last_seen_at, EXCLUDED.last_seen_at),
+         evidence_event_refs = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item->>'connector_id', item->>'event_id'), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements(
+               onishield.detection_findings.evidence_event_refs || EXCLUDED.evidence_event_refs
+             ) AS refs(item)
+           ) AS merged
+         ),
+         evidence_event_ids = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               onishield.detection_findings.evidence_event_ids || EXCLUDED.evidence_event_ids
+             ) AS ids(item)
+           ) AS merged
+         ),
+         matched_conditions = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               onishield.detection_findings.matched_conditions || EXCLUDED.matched_conditions
+             ) AS conditions(item)
+           ) AS merged
+         ),
+         updated_at = NOW()
+       RETURNING (xmax = 0) AS inserted`,
       [
         tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
         finding.status, finding.title, finding.explanation, finding.severity,
         finding.confidence, finding.first_seen_at, finding.last_seen_at,
+        finding.episode_anchor.connector_id, finding.episode_anchor.event_id,
         JSON.stringify(finding.evidence_event_ids),
         JSON.stringify(finding.evidence_event_refs),
         finding.grouping_key_hash,
@@ -36,7 +68,17 @@ async function insertFindings(
         JSON.stringify(finding.known_limitations)
       ]
     );
-    insertedCount += result.rowCount ?? 0;
+    insertedCount += result.rows.filter((row) => row.inserted).length;
+
+    for (const evidence of finding.evidence_event_refs) {
+      await client.query(
+        `INSERT INTO onishield.detection_finding_evidence
+          (tenant_id, finding_id, connector_id, event_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id, finding_id, connector_id, event_id) DO NOTHING`,
+        [tenantId, finding.finding_id, evidence.connector_id, evidence.event_id]
+      );
+    }
   }
   return insertedCount;
 }
@@ -155,7 +197,7 @@ export async function listDetectionFindings(
     const result = await client.query(
       `SELECT f.finding_id, f.rule_id, f.rule_version, f.status, f.title,
               f.explanation, f.severity, f.confidence, f.first_seen_at,
-              f.last_seen_at, f.evidence_event_ids, f.evidence_event_refs,
+              f.last_seen_at, f.episode_anchor_connector_id, f.episode_anchor_event_id,\n              f.evidence_event_ids, f.evidence_event_refs,
               f.grouping_key_hash, f.matched_conditions, f.known_limitations,
               f.created_at, f.updated_at,
               COALESCE((
