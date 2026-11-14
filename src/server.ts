@@ -453,6 +453,19 @@ app.post("/v1/events", async (request, reply) => {
     let detectionStatus: "evaluated" | "pending" = "evaluated";
     try {
       await evaluateAndPersistAroundEvent(config.tenantId, event);
+      // The synchronous path already evaluated this event. Mark only a still-
+      // pending job complete; if a worker owns a lease, it remains responsible.
+      await withTenantTransaction(config.tenantId, async (client) => {
+        await client.query(
+          `UPDATE onishield.detection_replay_jobs
+              SET status = 'completed', completed_at = NOW(),
+                  lease_until = NULL, lease_token = NULL,
+                  last_error = NULL, updated_at = NOW()
+            WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3
+              AND status = 'pending'`,
+          [config.tenantId, config.connectorId, event.event_id]
+        );
+      });
     } catch (detectionError) {
       // Event durability is independent of detection availability. A connector
       // replay can safely re-trigger this idempotent evaluation.
