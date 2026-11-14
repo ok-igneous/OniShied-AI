@@ -118,28 +118,18 @@ test("S3 immutable-vault download and isolated PostgreSQL restore survive key ro
     return manifest.backup_id;
   };
 
-  const download = async (backupId, directory, keyring) => {
+  const download = async (backupId, directory, keyring, artifactName) => {
+    assert.match(artifactName, /^[A-Za-z0-9._-]+\\.pgdump\\.enc$/);
     const manifestName = `${backupId}.manifest.json`;
     const output = await run(process.execPath, ["scripts/backup-s3.mjs", "download"], {
       ...baseEnv,
       ...keyring,
       S3_BACKUP_ID: backupId,
-      BACKUP_ARTIFACT: path.join(directory, "pending.pgdump.enc"),
+      BACKUP_ARTIFACT: path.join(directory, artifactName),
       BACKUP_MANIFEST: path.join(directory, manifestName)
-    }).catch(async error => {
-      // The downloader requires the artifact basename declared by the remote manifest.
-      const manifestPath = path.join(directory, manifestName);
-      await rm(manifestPath, { force: true });
-      throw error;
     });
     assert.match(output, /downloaded_and_locally_verified/);
-    const manifest = JSON.parse(await readFile(path.join(directory, manifestName), "utf8"));
-    const expectedArtifact = path.join(directory, manifest.artifact);
-    const pendingArtifact = path.join(directory, "pending.pgdump.enc");
-    if (manifest.artifact !== "pending.pgdump.enc") {
-      await rm(pendingArtifact, { force: true });
-    }
-    return { artifact: manifest.artifact, manifest: manifestName, output, expectedArtifact };
+    return { artifact: artifactName, manifest: manifestName, output };
   };
 
   try {
@@ -175,18 +165,18 @@ test("S3 immutable-vault download and isolated PostgreSQL restore survive key ro
 
     // Rotate the active key but retain the old key so remote historical backups remain recoverable.
     const rotatedKeyring = keyringEnvironment(oldKey, newKey, newKeyId);
-    const oldRemoteFiles = await download(oldBackupId, oldDownloadDirectory, rotatedKeyring);
+    const oldRemoteFiles = await download(oldBackupId, oldDownloadDirectory, rotatedKeyring, oldManifest.artifact);
     await restoreDownloaded(oldRemoteFiles, oldDownloadDirectory, oldTargetName, rotatedKeyring);
 
     // Repeat the historical restore from a second fresh download to ensure the vault copy remains usable.
-    const oldAgain = await download(oldBackupId, oldRotatedDownloadDirectory, rotatedKeyring);
+    const oldAgain = await download(oldBackupId, oldRotatedDownloadDirectory, rotatedKeyring, oldManifest.artifact);
     await restoreDownloaded(oldAgain, oldRotatedDownloadDirectory, oldRotatedTargetName, rotatedKeyring);
 
     const newFiles = backupFiles(await cli("create", rotatedKeyring));
     const newManifest = JSON.parse(await readFile(path.join(backupDirectory, newFiles.manifest), "utf8"));
     assert.equal(newManifest.key_id, newKeyId);
     const newBackupId = await upload(newFiles, rotatedKeyring);
-    const newRemoteFiles = await download(newBackupId, newDownloadDirectory, rotatedKeyring);
+    const newRemoteFiles = await download(newBackupId, newDownloadDirectory, rotatedKeyring, newManifest.artifact);
     await restoreDownloaded(newRemoteFiles, newDownloadDirectory, newTargetName, rotatedKeyring);
 
     for (const targetName of [oldTargetName, oldRotatedTargetName, newTargetName]) {
