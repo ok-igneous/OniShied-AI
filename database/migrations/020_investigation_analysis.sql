@@ -87,6 +87,23 @@ REVOKE ALL ON onishield.investigation_analysis_jobs, onishield.investigation_ana
 GRANT USAGE,SELECT ON SEQUENCE onishield.investigation_activity_id_seq TO onishield_owner;
 
 
+CREATE FUNCTION onishield.enforce_investigation_case_finding_limit()
+RETURNS trigger LANGUAGE plpgsql
+SET search_path=pg_catalog,onishield AS $
+DECLARE current_count INTEGER;
+BEGIN
+  SELECT count(*) INTO current_count FROM onishield.investigation_case_findings
+   WHERE tenant_id=NEW.tenant_id AND case_id=NEW.case_id;
+  IF current_count>=25 THEN
+    RAISE EXCEPTION 'Investigation case finding limit reached';
+  END IF;
+  RETURN NEW;
+END $;
+
+CREATE TRIGGER investigation_case_finding_limit
+BEFORE INSERT ON onishield.investigation_case_findings
+FOR EACH ROW EXECUTE FUNCTION onishield.enforce_investigation_case_finding_limit();
+
 CREATE FUNCTION onishield.reject_investigation_report_mutation()
 RETURNS trigger LANGUAGE plpgsql
 SET search_path=pg_catalog,onishield AS $
@@ -169,7 +186,7 @@ BEGIN
         'title',f.title,'explanation',f.explanation,'severity',f.severity,
         'confidence',f.confidence,'first_seen_at',f.first_seen_at,'last_seen_at',f.last_seen_at,
         'matched_conditions',f.matched_conditions,'known_limitations',f.known_limitations,
-        'evidence',COALESCE((
+        'evidence_total_count',(SELECT count(*) FROM onishield.detection_finding_evidence ec\n          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),\n        'evidence_truncated',(SELECT count(*)>100 FROM onishield.detection_finding_evidence ec\n          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),\n        'evidence',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'connector_id',e.connector_id,'event_id',e.event_id,
             'observed_at',e.observed_at,'event_type',e.event_type
@@ -180,10 +197,10 @@ BEGIN
             JOIN onishield.security_events ev
               ON ev.tenant_id=e.tenant_id AND ev.connector_id=e.connector_id AND ev.event_id=e.event_id
             WHERE e.tenant_id=f.tenant_id AND e.finding_id=f.finding_id
-            ORDER BY ev.observed_at,e.connector_id,e.event_id LIMIT 500
+            ORDER BY ev.observed_at,e.connector_id,e.event_id LIMIT 100
           ) e
         ),'[]'::jsonb),
-        'threat_matches',COALESCE((
+        'threat_match_total_count',(SELECT count(*) FROM onishield.detection_finding_threat_matches tc\n          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),\n        'threat_matches_truncated',(SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc\n          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),\n        'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'indicator_type',match_data.indicator_type,
             'indicator_value',match_data.value_normalized,
@@ -214,7 +231,7 @@ BEGIN
             JOIN onishield.threat_intelligence_sources src
               ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
             WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
-            ORDER BY tim.matched_at DESC LIMIT 100
+            ORDER BY tim.matched_at DESC LIMIT 20
           ) AS match_data
         ),'[]'::jsonb)
       ) ORDER BY f.last_seen_at DESC)
