@@ -16,3 +16,4 @@ REVOKE INSERT ON onishield.threat_intelligence_sources FROM onishield_app;
 \i database/migrations/011_operator_mfa_recovery_codes.sql
 \i database/migrations/012_operator_email_lifecycle.sql
 \i database/migrations/013_detection_findings.sql
+\i database/migrations/014_threat_match_connector_identity.sql
