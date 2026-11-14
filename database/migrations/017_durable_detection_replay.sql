@@ -35,21 +35,24 @@ CREATE INDEX detection_replay_jobs_completed_idx
   ON onishield.detection_replay_jobs (tenant_id, completed_at DESC)
   WHERE status = 'completed';
 
+GRANT SELECT, INSERT, UPDATE ON onishield.detection_replay_jobs TO onishield_app;
+GRANT USAGE, SELECT ON SEQUENCE onishield.detection_replay_jobs_id_seq TO onishield_app;
+
+-- FORCE RLS also applies to the table owner. Temporarily remove FORCE from
+-- the source table inside this transaction so the migration owner can seed
+-- jobs for historical rows. Restore FORCE before committing the migration.
+ALTER TABLE onishield.security_events NO FORCE ROW LEVEL SECURITY;
+INSERT INTO onishield.detection_replay_jobs (tenant_id, connector_id, event_id)
+SELECT tenant_id, connector_id, event_id
+FROM onishield.security_events
+ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING;
+ALTER TABLE onishield.security_events FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE onishield.detection_replay_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE onishield.detection_replay_jobs FORCE ROW LEVEL SECURITY;
 CREATE POLICY detection_replay_jobs_tenant_isolation
   ON onishield.detection_replay_jobs
   USING (tenant_id = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
-
-GRANT SELECT, INSERT, UPDATE ON onishield.detection_replay_jobs TO onishield_app;
-GRANT USAGE, SELECT ON SEQUENCE onishield.detection_replay_jobs_id_seq TO onishield_app;
-
--- Existing events are queued once. This is a bounded migration-time backfill
--- in the sense that it creates one idempotent job per stored event.
-INSERT INTO onishield.detection_replay_jobs (tenant_id, connector_id, event_id)
-SELECT tenant_id, connector_id, event_id
-FROM onishield.security_events
-ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING;
 
 COMMIT;
