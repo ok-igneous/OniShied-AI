@@ -56,6 +56,7 @@ jobs:
             -v migrator_password="$MIGRATOR_DB_PASSWORD" \
             -v app_password="$APP_DB_PASSWORD" \
             -v auth_password="$AUTH_DB_PASSWORD" \
+            -v endpoint_ingest_password="$ENDPOINT_INGEST_DB_PASSWORD" \
             -f database/bootstrap-roles.sql
           PGPASSWORD="$MIGRATOR_DB_PASSWORD" psql -h 127.0.0.1 \
             -U onishield_migrator -d onishield_lab \
