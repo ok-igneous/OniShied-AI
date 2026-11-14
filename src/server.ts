@@ -6,6 +6,7 @@ import { authPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
+import { evaluateAndPersistAroundEvent, listDetectionFindings } from "./detection-finding-store.js";
 import { ResendEmailDelivery } from "./email-delivery.js";
 import { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
 import { registerOperatorAccountRoutes } from "./operator-account-routes.js";
@@ -315,6 +316,24 @@ app.post<{ Params: { indicatorId: string } }>(
   }
 );
 
+app.get("/v1/findings", async (request, reply) => {
+  if (!authorizedBearer(request.headers.authorization)) {
+    return reply.code(401).send({ error: "unauthorized" });
+  }
+  const parsed = z.object({
+    limit: z.coerce.number().int().min(1).max(500).default(100)
+  }).strict().safeParse(request.query);
+  if (!parsed.success) return reply.code(400).send({ error: "invalid_findings_query" });
+  try {
+    const findings = await listDetectionFindings(config.tenantId, parsed.data.limit);
+    reply.header("cache-control", "no-store");
+    return { findings };
+  } catch (error) {
+    request.log.error({ err: error }, "Failed to list detection findings");
+    return reply.code(503).send({ error: "findings_unavailable" });
+  }
+});
+
 app.get("/health", async (_request, reply) => {
   try {
     await pool.query("SELECT 1");
@@ -408,17 +427,30 @@ app.post("/v1/events", async (request, reply) => {
       });
     }
 
+    let detectionStatus: "evaluated" | "pending" = "evaluated";
+    try {
+      await evaluateAndPersistAroundEvent(config.tenantId, event);
+    } catch (detectionError) {
+      // Event durability is independent of detection availability. A connector
+      // replay can safely re-trigger this idempotent evaluation.
+      detectionStatus = "pending";
+      request.log.error({ err: detectionError, event_id: event.event_id },
+        "Event stored but detection evaluation failed");
+    }
+
     if (outcome === "duplicate") {
       return reply.code(200).send({
         status: "duplicate",
-        event_id: event.event_id
+        event_id: event.event_id,
+        detection_status: detectionStatus
       });
     }
 
     return reply.code(202).send({
       status: "accepted",
       event_id: event.event_id,
-      ingested_at: ingestedAt
+      ingested_at: ingestedAt,
+      detection_status: detectionStatus
     });
   } catch (error) {
     request.log.error({ err: error }, "Failed to persist security event");
