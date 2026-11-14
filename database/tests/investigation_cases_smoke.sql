@@ -32,6 +32,10 @@ VALUES
   '[{"connector_id":"investigation-connector","event_id":"investigation-event"}]'::jsonb,
   repeat('f',64),'["threshold_met"]'::jsonb,'[]'::jsonb);
 
+INSERT INTO onishield.detection_finding_evidence
+ (tenant_id,finding_id,connector_id,event_id)
+VALUES ('investigation-tenant-a',repeat('e',64),'investigation-connector','investigation-event');
+
 INSERT INTO onishield.operator_sessions
  (tenant_id,operator_id,membership_id,token_hash,expires_at,step_up_at)
 VALUES
@@ -51,6 +55,8 @@ BEGIN
   detail := onishield.get_investigation_case(repeat('a',64),cid);
   IF detail->'case'->>'id' <> cid::text
      OR jsonb_array_length(detail->'findings') <> 1
+     OR jsonb_array_length(detail->'findings'->0->'evidence') <> 1
+     OR detail->'findings'->0->'finding'->>'severity' <> 'high'
      OR jsonb_array_length(detail->'activity') <> 2 THEN
     RAISE EXCEPTION 'Investigation detail did not include expected case, finding, and activity';
   END IF;
