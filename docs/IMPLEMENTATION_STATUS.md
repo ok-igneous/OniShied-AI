@@ -10,6 +10,7 @@
 - Tenant-scoped PostgreSQL transactions and RLS policies for security events.
 - Separate owner, migrator, and runtime database roles with least-privilege runtime grants.
 - Synthetic event fixture and localhost-only replay script.
+- Detection evaluation refuses to process a truncated time window: it fetches one row beyond the 5,000-event ceiling and fails the evaluation explicitly when the ceiling is exceeded. The accepted event remains durable and is reported as pending detection; no incomplete finding set is published.
 - Source-file line-count enforcement with a hard 500-line maximum in CI.
 - Deterministic threat-indicator normalization and exact matching for explicitly mapped event fields.
 - Tenant-scoped threat-intelligence tables, match persistence, and database uniqueness for idempotent match records.
