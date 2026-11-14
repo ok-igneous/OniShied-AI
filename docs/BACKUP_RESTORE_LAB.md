@@ -122,7 +122,7 @@ export BACKUP_MANIFEST='/secure/restore/backup-id.manifest.json'
 node scripts/backup-s3.mjs download
 ```
 
-The downloader fetches the exact version IDs returned by the bucket, checks object identity and COMPLIANCE retention metadata, verifies downloaded bytes against remote SHA-256 metadata and the authenticated manifest, then runs the full local archive verifier. A successful download is still not a restore drill; use the isolated PostgreSQL restore procedure above afterward.
+The downloader obtains a version ID from the object metadata and passes that exact ID to GetObject. For deterministic recovery from a recorded upload, optionally set `S3_MANIFEST_VERSION_ID` and `S3_ARTIFACT_VERSION_ID` to the two version IDs printed by the upload command; the downloader pins its HEAD and GET operations to those versions and fails if the requested version does not match. It checks object identity and unexpired COMPLIANCE retention metadata, verifies downloaded bytes against remote SHA-256 metadata and the authenticated manifest, then runs the full local archive verifier. The opt-in S3 integration drill records the upload version IDs and explicitly pins both downloads to those exact versions. A successful download is still not a restore drill; use the isolated PostgreSQL restore procedure above afterward.
 
 
 ## Immutable S3 vault recovery integration drill
