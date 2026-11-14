@@ -14,6 +14,9 @@
   - GET /v1/operator/investigations/:caseId
   - POST /v1/operator/investigations/:caseId/findings
   - POST /v1/operator/investigations/:caseId/notes
+  - POST /v1/operator/investigations/:caseId/analyze
+  - GET /v1/operator/investigations/:caseId/analysis-status
+  - GET /v1/operator/investigations/:caseId/reports
 - Case detail returns associated findings, exact structured event evidence references, and activity timeline.
 - Case priority is initialized from the highest severity among selected findings.
 - Duplicate finding association requests are idempotent; unique constraints protect concurrent duplicate writes.
