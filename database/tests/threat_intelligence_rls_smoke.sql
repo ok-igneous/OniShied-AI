@@ -10,6 +10,18 @@ INSERT INTO onishield.threat_intelligence_sources
 VALUES
   ('ti-tenant-a', 'synthetic-lab', 'Synthetic lab source', 'synthetic', 'internal-test');
 
+-- Seed two distinct canonical events that intentionally share an event_id.
+INSERT INTO onishield.security_events
+  (tenant_id, connector_id, event_id, schema_version, event_type,
+   observed_at, severity_hint, event_json, payload_sha256)
+VALUES
+  ('ti-tenant-a', 'connector-a', 'synthetic-event-1', '0.1.0',
+   'network.connection.observed', NOW(), 'info',
+   '{"data":{"source_ip":"192.0.2.44"}}'::jsonb, repeat('a', 64)),
+  ('ti-tenant-a', 'connector-b', 'synthetic-event-1', '0.1.0',
+   'network.connection.observed', NOW(), 'info',
+   '{"data":{"source_ip":"192.0.2.44"}}'::jsonb, repeat('b', 64));
+
 SET LOCAL ROLE onishield_app;
 
 WITH source_row AS (
@@ -28,21 +40,21 @@ indicator_row AS (
   RETURNING tenant_id, id, version
 )
 INSERT INTO onishield.threat_indicator_matches
-  (tenant_id, event_id, indicator_id, indicator_version,
+  (tenant_id, connector_id, event_id, indicator_id, indicator_version,
    matched_field_path, matcher_version)
-SELECT tenant_id, 'synthetic-event-1', id, version,
+SELECT tenant_id, 'connector-a', 'synthetic-event-1', id, version,
        'data.source_ip', 'exact-v1'
   FROM indicator_row
 ON CONFLICT (
-  tenant_id, event_id, indicator_id, indicator_version,
+  tenant_id, connector_id, event_id, indicator_id, indicator_version,
   matched_field_path, matcher_version
 ) DO NOTHING;
 
 -- A replay of the same evidence must not create a second match row.
 INSERT INTO onishield.threat_indicator_matches
-  (tenant_id, event_id, indicator_id, indicator_version,
+  (tenant_id, connector_id, event_id, indicator_id, indicator_version,
    matched_field_path, matcher_version)
-SELECT tenant_id, 'synthetic-event-1', id, version,
+SELECT tenant_id, 'connector-a', 'synthetic-event-1', id, version,
        'data.source_ip', 'exact-v1'
   FROM onishield.threat_indicators
  WHERE indicator_key = 'synthetic-indicator-1'
@@ -58,8 +70,17 @@ BEGIN
   SELECT count(*) INTO match_count
     FROM onishield.threat_indicator_matches
    WHERE event_id = 'synthetic-event-1';
+  IF match_count <> 2 THEN
+    RAISE EXCEPTION 'Connector-scoped match identity or replay idempotency failed';
+  END IF;
+
+  SELECT count(*) INTO match_count
+    FROM onishield.threat_indicator_matches
+   WHERE tenant_id = 'ti-tenant-a'
+     AND connector_id = 'connector-a'
+     AND event_id = 'synthetic-event-1';
   IF match_count <> 1 THEN
-    RAISE EXCEPTION 'Match replay is not idempotent';
+    RAISE EXCEPTION 'Connector A replay created duplicate match rows';
   END IF;
 
   BEGIN
