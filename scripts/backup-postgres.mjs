@@ -217,8 +217,7 @@ async function restoreBackup() {
       `pg_restore failed: ${stderr.trim()}`
     )));
   });
-  await pipeline(ciphertext, decipher, child.stdin);
-  await exit;
+  await Promise.all([pipeline(ciphertext, decipher, child.stdin), exit]);
   process.stdout.write(`Restore completed into isolated database ${target.database}. Run application and tenant-integrity checks before any cutover.\n`);
 }
 
