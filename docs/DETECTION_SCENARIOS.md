@@ -1,13 +1,13 @@
 # Initial Detection Scenario Catalogue
 
-**Status:** The first two rules are implemented, persisted under tenant RLS, evaluated after accepted event ingestion, and exposed through an authenticated findings endpoint. Streaming state, alert delivery, and end-to-end runtime verification remain incomplete.  
+**Status:** The first two rules are implemented, persisted under tenant RLS, evaluated after accepted event ingestion, enriched with exact active-indicator evidence, and exposed through an authenticated findings endpoint. Streaming state, alert delivery, and end-to-end runtime verification remain incomplete.  
 **Scope:** Controlled synthetic Linux identity/security telemetry.  
 **Safety:** All examples are synthetic. No live systems, credential attacks, or external targets are involved.
 
 ## Design rules
 
 1. Detection rules are deterministic and versioned. Identical input and rule versions must produce identical findings.
-2. Every finding must cite one or more immutable event references (`connector_id:event_id`) and identify the exact rule version.
+2. Every finding must cite one or more immutable structured event references (`connector_id`, `event_id`) and identify the exact rule version.
 3. A source-provided severity hint is not a detection result.
 4. A rule must define its time window, grouping key, threshold, exclusions, and known blind spots.
 5. Missing or malformed fields produce an insufficient-data result, not an invented conclusion.
@@ -118,4 +118,4 @@ Do not store a model-generated narrative as the source of truth for a determinis
 
 ## Implementation gate
 
-The first two rules now run after accepted or replayed event ingestion. Findings are persisted under tenant RLS and can be listed through the connector-authenticated `/v1/findings` endpoint. The request path re-evaluates a bounded +/-10-minute neighborhood around the event, so late arrivals inside that horizon can be correlated. Older late events require a future replay job. Alert delivery, finding lifecycle/merging, and end-to-end runtime tests remain unimplemented. Do not enable customer response actions; the engine does not execute them.
+The first two rules now run after accepted or replayed event ingestion. Findings are persisted under tenant RLS and can be listed through the connector-authenticated `/v1/findings` endpoint. For events cited by a finding, active threat-indicator matches are persisted and linked to the finding using exact tenant, connector, event and match identifiers. This is contextual evidence only; it does not change severity or trigger a response. The request path re-evaluates a bounded +/-10-minute neighborhood around the event, so late arrivals inside that horizon can be correlated. Older late events require a future replay job. Alert delivery, finding lifecycle/merging, and end-to-end runtime tests remain unimplemented. Do not enable customer response actions; the engine does not execute them.
