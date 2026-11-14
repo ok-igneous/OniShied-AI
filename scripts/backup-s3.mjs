@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   GetBucketObjectLockConfigurationCommand,
+  GetObjectCommand,
   GetBucketVersioningCommand,
   HeadObjectCommand,
   S3Client
@@ -47,7 +49,8 @@ async function runLocalVerification(artifactPath, manifestPath) {
 
 async function headAndVerify(client, bucket, key, expected, retentionDate) {
   const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-  if (head.Metadata?.sha256 !== expected.sha256 ||
+  if (!head.VersionId ||
+      head.Metadata?.sha256 !== expected.sha256 ||
       head.Metadata?.backup_id !== expected.backupId ||
       head.Metadata?.object_kind !== expected.kind ||
       !head.VersionId ||
@@ -58,6 +61,63 @@ async function headAndVerify(client, bucket, key, expected, retentionDate) {
     throw new Error(`Remote object verification or compliance retention check failed for ${key}`);
   }
   return { version_id: head.VersionId, size: head.ContentLength, retain_until: head.ObjectLockRetainUntilDate };
+}
+
+async function downloadLockedObject(client, bucket, key, destination, expected, kind, backupId) {
+  const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  if (!head.VersionId || head.Metadata?.backup_id !== backupId ||
+      head.Metadata?.object_kind !== kind || head.ObjectLockMode !== "COMPLIANCE" ||
+      !head.ObjectLockRetainUntilDate || !Number.isInteger(head.ContentLength)) {
+    throw new Error(`Remote object is missing required identity, version or COMPLIANCE retention: ${key}`);
+  }
+  const response = await client.send(new GetObjectCommand({
+    Bucket: bucket, Key: key, VersionId: head.VersionId
+  }));
+  await pipeline(response.Body, createWriteStream(destination, { flags: "wx", mode: 0o600 }));
+  const info = await stat(destination);
+  const digest = await sha256(destination);
+  if (info.size !== head.ContentLength || digest !== head.Metadata.sha256 ||
+      (expected?.sha256 && digest !== expected.sha256)) {
+    await rm(destination, { force: true });
+    throw new Error(`Downloaded object integrity check failed: ${key}`);
+  }
+  return { version_id: head.VersionId, size: info.size, sha256: digest };
+}
+
+async function downloadBackup(client, bucket, baseKey, backupId) {
+  const artifactPath = path.resolve(required(process.env.BACKUP_ARTIFACT, "BACKUP_ARTIFACT"));
+  const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
+  const manifestName = `${backupId}.manifest.json`;
+  if (path.basename(manifestPath) !== manifestName) {
+    throw new Error(`BACKUP_MANIFEST must end with ${manifestName}`);
+  }
+  const manifestKey = `${baseKey}/${manifestName}`;
+  try {
+    const manifestObject = await downloadLockedObject(
+      client, bucket, manifestKey, manifestPath, null, "authenticated-backup-manifest", backupId
+    );
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (manifest.backup_id !== backupId || !/^[A-Za-z0-9._-]{1,220}\\.pgdump\\.enc$/.test(manifest.artifact) ||
+        path.basename(artifactPath) !== manifest.artifact) {
+      throw new Error("Downloaded manifest identity does not match requested backup or artifact path");
+    }
+    const artifactKey = `${baseKey}/${manifest.artifact}`;
+    const artifactObject = await downloadLockedObject(
+      client, bucket, artifactKey, artifactPath,
+      { sha256: manifest.encrypted_sha256 }, "encrypted-postgresql-artifact", backupId
+    );
+    await runLocalVerification(artifactPath, manifestPath);
+    return {
+      backup_id: backupId,
+      artifact: { key: artifactKey, ...artifactObject },
+      manifest: { key: manifestKey, ...manifestObject },
+      local_verification: "passed"
+    };
+  } catch (error) {
+    await rm(artifactPath, { force: true });
+    await rm(manifestPath, { force: true });
+    throw error;
+  }
 }
 
 async function uploadLockedObject(client, bucket, key, file, metadata, retentionDate, contentType) {
@@ -127,6 +187,15 @@ async function main() {
   const lock = await client.send(new GetBucketObjectLockConfigurationCommand({ Bucket: bucket }));
   if (lock.ObjectLockConfiguration?.ObjectLockEnabled !== "Enabled") {
     throw new Error("Destination bucket must have S3 Object Lock enabled; refusing a mutable vault");
+  }
+  if (process.argv[2] === "download") {
+    const backupId = required(process.env.S3_BACKUP_ID, "S3_BACKUP_ID");
+    if (!/^[A-Za-z0-9._-]{1,180}$/.test(backupId)) throw new Error("S3_BACKUP_ID contains invalid characters");
+    const baseKey = [prefix, backupId].filter(Boolean).join("/");
+    const result = await downloadBackup(client, bucket, baseKey, backupId);
+    process.stdout.write(JSON.stringify({ status: "downloaded_and_locally_verified", bucket, ...result }, null, 2) + String.fromCharCode(10));
+    await client.destroy();
+    return;
   }
 
   const retentionDate = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
