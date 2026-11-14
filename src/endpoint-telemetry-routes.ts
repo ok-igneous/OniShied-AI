@@ -75,7 +75,7 @@ export function registerEndpointTelemetryRoutes(
       if(error instanceof Error && /Unauthorized endpoint credential/.test(error.message)) {
         return reply.code(401).send({error:"unauthorized_endpoint"});
       }
-      if(error instanceof Error && /Endpoint event identity, version, hostname, platform, or timestamp mismatch|Endpoint event identity or platform mismatch|Invalid endpoint telemetry batch|Invalid endpoint event identity/.test(error.message)) {
+      if(error instanceof Error && /Endpoint event identity, version, hostname, platform, or timestamp mismatch|Endpoint event identity or platform mismatch|Invalid endpoint telemetry batch|Invalid endpoint event identity|Invalid endpoint event shape/.test(error.message)) {
         return reply.code(400).send({error:"invalid_endpoint_telemetry"});
       }
       if(error instanceof Error && /Endpoint sequence replay conflict/.test(error.message)) {
