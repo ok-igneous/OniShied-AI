@@ -30,18 +30,6 @@ function localHost(host) {
   return ["localhost", "127.0.0.1", "::1"].includes(host);
 }
 
-function runCommand(command, args, env) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { env, stdio: ["pipe", "ignore", "pipe"] });
-    let stderr = "";
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-12000); });
-    child.once("error", reject);
-    child.once("close", code => code === 0
-      ? resolve()
-      : reject(new Error(`${command} exited with code ${code}: ${stderr.trim()}`)));
-  });
-}
 
 async function hashFile(file) {
   const hash = createHash("sha256");
@@ -161,11 +149,8 @@ function commandOutput(command, args) {
   });
 }
 
-async function verifyBackup() {
-  const artifactPath = path.resolve(required(process.env.BACKUP_ARTIFACT, "BACKUP_ARTIFACT"));
-  const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
-  const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
-  const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
+async function validateArchive(artifactPath, info, iv, tag, encryptionKey) {
+  const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, encryptionKey);
   const child = spawn("pg_restore", ["--list"], { stdio: ["pipe", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf8");
@@ -178,7 +163,14 @@ async function verifyBackup() {
   });
   await pipeline(ciphertext, decipher, child.stdin);
   await exit;
-  process.stdout.write(`Backup integrity and PostgreSQL archive validation passed: ${manifest.backup_id}\n`);
+}
+
+async function verifyBackup() {
+  const artifactPath = path.resolve(required(process.env.BACKUP_ARTIFACT, "BACKUP_ARTIFACT"));
+  const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
+  const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
+  await validateArchive(artifactPath, info, iv, tag, keys.encryptionKey);
+  process.stdout.write(`Backup integrity and PostgreSQL archive validation passed: ${manifest.backup_id}\\n`);
 }
 
 async function restoreBackup() {
@@ -193,15 +185,23 @@ async function restoreBackup() {
     throw new Error("Restore target must be loopback unless RESTORE_ALLOW_REMOTE_TARGET=YES_I_UNDERSTAND is explicitly set");
   }
   const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
-  if (JSON.stringify(target) === JSON.stringify(manifest.source)) {
-    throw new Error("Refusing to restore over the source database");
+  if (target.database === manifest.source.database) {
+    throw new Error("Restore target database name must differ from the source database name");
   }
-  await runCommand("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-Atqc",
-    "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')"],
-  { ...process.env, PGDATABASE: targetUrl });
-  const tableCount = await queryScalar(targetUrl,
-    "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')");
-  if (Number(tableCount) !== 0) throw new Error("Restore target is not empty; no objects were changed");
+  // Authenticate/decrypt the complete archive before connecting to the target.
+  await validateArchive(artifactPath, info, iv, tag, keys.encryptionKey);
+  const objectCount = await queryScalar(targetUrl, `
+    SELECT
+      (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')
+         AND c.relkind IN ('r','p','v','m','S','f'))
+      + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+         WHERE n.nspname NOT IN ('pg_catalog','information_schema'))
+      + (SELECT count(*) FROM pg_namespace
+         WHERE nspname NOT IN ('pg_catalog','information_schema','public','pg_toast'))
+      + (SELECT count(*) FROM pg_extension WHERE extname <> 'plpgsql')
+  `);
+  if (Number(objectCount) !== 0) throw new Error("Restore target is not empty; no objects were changed");
   const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
   const child = spawn("pg_restore", [
     "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
