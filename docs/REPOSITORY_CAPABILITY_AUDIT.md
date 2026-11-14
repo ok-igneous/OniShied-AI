@@ -78,7 +78,7 @@ These are meaningful building blocks. They are not equivalent to a deployed endp
 
 ### 3.2 Deterministic detection is an early demonstrator, not a production pipeline
 
-Two authentication rules now exist: eight failures within five minutes for the same tenant/host/principal/source address, and five failures followed by success within ten minutes for the same tenant/host/principal. Findings include rule version, confidence/severity, matched conditions, limitations and connector-qualified evidence references. Ingestion triggers a bounded re-evaluation and findings are stored under tenant RLS. The query is capped at 5,000 events and only covers a +/-10-minute neighborhood around the ingested event; older late arrivals need a replay process. A follow-up source correction makes event ordering deterministic when separate connectors emit the same event ID at the same timestamp; its new regression test is authored but has not run. There is no alert delivery, finding lifecycle/merge model, streaming watermark, or successful CI/runtime proof. Treat this as an unverified first implementation, not a customer-ready detection service.
+Two authentication rules now exist: eight failures within five minutes for the same tenant/host/principal/source address, and five failures followed by success within ten minutes for the same tenant/host/principal. Findings include rule version, confidence/severity, matched conditions, limitations and connector-qualified evidence references. Ingestion triggers a bounded re-evaluation and findings are stored under tenant RLS. The query is capped at 5,000 events and only covers a +/-10-minute neighborhood around the ingested event; older late arrivals need a replay process. A follow-up source correction makes event ordering deterministic when separate connectors emit the same event ID at the same timestamp. Finding IDs now hash structured connector/event references rather than delimiter-concatenated strings; a regression test covers identifiers containing delimiters. These tests are authored but have not run. There is no alert delivery, finding lifecycle/merge model, streaming watermark, or successful CI/runtime proof. Treat this as an unverified first implementation, not a customer-ready detection service.
 
 ### 3.3 Threat intelligence is not detection
 
@@ -110,8 +110,8 @@ The repository has a CI workflow that intends to run:
 
 The latest run observed during this update:
 
-- Workflow run: [#398](https://github.com/ok-igneous/OniShied-AI/actions/runs/43576699091)
-- Commit: `b61ef4ed354c546ca0586751a8d58313bc55954a`
+- Workflow run: [#402](https://github.com/ok-igneous/OniShied-AI/actions/runs/43579530358)
+- Commit: `c6f5cb69f3bfbbd66f41b7790fe38aa91aff6fc2`
 - Conclusion: **failure**
 - Job runner ID: `0`
 - Job steps: none
