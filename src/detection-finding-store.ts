@@ -16,7 +16,7 @@ async function insertFindings(
       throw new Error("Finding tenant does not match transaction tenant");
     }
     const result = await client.query<{ inserted: boolean }>(
-      `INSERT INTO onishield.detection_findings
+      `INSERT INTO onishield.detection_findings AS current_finding
         (tenant_id, finding_id, rule_id, rule_version, status, title,
          explanation, severity, confidence, first_seen_at, last_seen_at,
          episode_anchor_connector_id, episode_anchor_event_id,
@@ -25,14 +25,14 @@ async function insertFindings(
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb)
        ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
-         first_seen_at = LEAST(onishield.detection_findings.first_seen_at, EXCLUDED.first_seen_at),
-         last_seen_at = GREATEST(onishield.detection_findings.last_seen_at, EXCLUDED.last_seen_at),
+         first_seen_at = LEAST(current_finding.first_seen_at, EXCLUDED.first_seen_at),
+         last_seen_at = GREATEST(current_finding.last_seen_at, EXCLUDED.last_seen_at),
          evidence_event_refs = (
            SELECT COALESCE(jsonb_agg(item ORDER BY item->>'connector_id', item->>'event_id'), '[]'::jsonb)
            FROM (
              SELECT DISTINCT item
              FROM jsonb_array_elements(
-               onishield.detection_findings.evidence_event_refs || EXCLUDED.evidence_event_refs
+               current_finding.evidence_event_refs || EXCLUDED.evidence_event_refs
              ) AS refs(item)
            ) AS merged
          ),
@@ -41,7 +41,7 @@ async function insertFindings(
            FROM (
              SELECT DISTINCT item
              FROM jsonb_array_elements_text(
-               onishield.detection_findings.evidence_event_ids || EXCLUDED.evidence_event_ids
+               current_finding.evidence_event_ids || EXCLUDED.evidence_event_ids
              ) AS ids(item)
            ) AS merged
          ),
@@ -50,7 +50,7 @@ async function insertFindings(
            FROM (
              SELECT DISTINCT item
              FROM jsonb_array_elements_text(
-               onishield.detection_findings.matched_conditions || EXCLUDED.matched_conditions
+               current_finding.matched_conditions || EXCLUDED.matched_conditions
              ) AS conditions(item)
            ) AS merged
          ),
@@ -159,6 +159,26 @@ export async function evaluateAndPersistAroundEvent(
     throw new Error("Event tenant does not match detection scope");
   }
   return withTenantTransaction(tenantId, async (client) => {
+    // Serialize evaluation for the exact detector grouping keys. Ingestion is
+    // already committed before this transaction starts, so a waiter sees the
+    // preceding evaluator's committed event and finding writes.
+    const principal = typeof event.data.principal_ref === "string"
+      ? event.data.principal_ref.trim() : "";
+    const host = typeof event.source.host_ref === "string"
+      ? event.source.host_ref.trim() : "";
+    const lockKeys: string[] = [];
+    if (principal && host) {
+      lockKeys.push(JSON.stringify(["sequence", tenantId, host, principal]));
+      if (event.event_type === "identity.authentication.failure") {
+        const address = typeof event.data.source_address === "string"
+          ? event.data.source_address.trim() : "";
+        if (address) lockKeys.push(JSON.stringify(["burst", tenantId, host, principal, address]));
+      }
+    }
+    for (const key of lockKeys.sort()) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
+    }
+
     const rows = await client.query<{ event_json: unknown }>(
       `SELECT event_json
          FROM onishield.security_events
@@ -197,7 +217,8 @@ export async function listDetectionFindings(
     const result = await client.query(
       `SELECT f.finding_id, f.rule_id, f.rule_version, f.status, f.title,
               f.explanation, f.severity, f.confidence, f.first_seen_at,
-              f.last_seen_at, f.episode_anchor_connector_id, f.episode_anchor_event_id,\n              f.evidence_event_ids, f.evidence_event_refs,
+              f.last_seen_at, f.episode_anchor_connector_id, f.episode_anchor_event_id,
+              f.evidence_event_ids, f.evidence_event_refs,
               f.grouping_key_hash, f.matched_conditions, f.known_limitations,
               f.created_at, f.updated_at,
               COALESCE((
