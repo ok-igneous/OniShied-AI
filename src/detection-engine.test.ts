@@ -182,3 +182,23 @@ test("same-time events from different connectors have stable evidence ordering",
       .map((item) => `${item.source.connector_id}:${item.event_id}`)
   );
 });
+
+
+test("finding identity cannot collide on colon-containing connector and event IDs", () => {
+  const left = Array.from({ length: 8 }, (_, i) => event({
+    id: `event-${i}`,
+    connector: `connector:part`,
+    at: at(i * 10)
+  }));
+  const right = Array.from({ length: 8 }, (_, i) => event({
+    id: `part:event-${i}`,
+    connector: "connector",
+    at: at(i * 10)
+  }));
+
+  const leftFinding = evaluateDetections(left)[0]!;
+  const rightFinding = evaluateDetections(right)[0]!;
+  assert.deepEqual(leftFinding.evidence_event_ids, rightFinding.evidence_event_ids);
+  assert.notDeepEqual(leftFinding.evidence_event_refs, rightFinding.evidence_event_refs);
+  assert.notEqual(leftFinding.finding_id, rightFinding.finding_id);
+});
