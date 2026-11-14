@@ -10,7 +10,7 @@ A finding begins as `open`. Permitted transitions are:
 - `resolved` → `reopened`
 - `reopened` → `acknowledged`, `investigating`, or `resolved`
 
-Suppressed findings have no transition out in this first implementation. Invalid transitions are rejected by PostgreSQL, not merely by route validation.
+Suppressed findings have no transition out in this first implementation. New evidence does not automatically reopen a resolved finding; an authorized analyst must explicitly reopen it. Invalid transitions are rejected by PostgreSQL, not merely by route validation.
 
 ## Authorization and audit
 
