@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
 import type { OperatorAuthService } from "./operator-auth-service.js";
@@ -125,8 +125,8 @@ function bearer(header: string | undefined): string | null {
 }
 
 function handleError(
-  request: { log: { error: (context: unknown, message: string) => void } },
-  reply: { code: (status: number) => { send: (body: unknown) => unknown } },
+  request: FastifyRequest,
+  reply: FastifyReply,
   error: unknown,
   fallback: string
 ): unknown {
