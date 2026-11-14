@@ -138,3 +138,21 @@ test("does not duplicate mandatory limitation disclosures already returned by th
     1
   );
 });
+
+test("reserves report limitation capacity for all mandatory evidence warnings", () => {
+  const limitedInput = investigationAnalysisInputSchema.parse({
+    ...input,
+    findings: input.findings.map((finding) => ({
+      ...finding,
+      evidence_truncated: true,
+      threat_matches_truncated: true,
+      threat_matches_withheld_count: 1
+    }))
+  });
+  const crowdedReport = { ...report, limitations: Array.from({ length: 30 }, (_, index) => `model limitation ${index}`) };
+  const enforced = enforceInvestigationInputLimitations(crowdedReport, limitedInput);
+  assert.equal(enforced.limitations.length, 30);
+  assert.ok(enforced.limitations.some((item) => item.includes("evidence package was truncated")));
+  assert.ok(enforced.limitations.some((item) => item.includes("TLP classification was not CLEAR")));
+  assert.ok(enforced.limitations.some((item) => item.includes("threat-intelligence match list is partial")));
+});
