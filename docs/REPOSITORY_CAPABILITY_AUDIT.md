@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-14  
 **Repository:** `ok-igneous/OniShied-AI`  
-**Branch inspected:** `main`  
+**Branch inspected:** `main` plus stacked implementation branches through PR #31  
 **Scope:** Repository tree, TypeScript source, SQL migrations/tests, product contracts, package manifest and latest GitHub Actions run.  
 **Audit type:** Static repository audit. No code was executed in a local or hosted development environment during this audit.
 
@@ -54,7 +54,7 @@ A checked-in test file does not prove that the test passes. A migration file doe
 | AI investigation service | **Design only** | `docs/INVESTIGATION_ENGINE_CONTRACT.md` defines a read-only contract; no model provider/AI service implementation or AI SDK dependency was found in the inspected manifest/source tree. |
 | Evidence-linked security advisor | **Design only / missing UI** | Desired output is described in product docs; no implemented advisor service or user interface was found. |
 | Response action registry and executor | **Design only** | Contracts define narrow typed actions, authorization and audit; no response executor or endpoint action adapter was found. |
-| Production Windows/Linux endpoint agent | **Missing; protocol/enrollment partial** | `src/endpoint-telemetry.ts` defines six strict metadata event shapes. Migration 022 and enrollment routes issue one-time tenant-bound grants and per-device credentials with revocation. No endpoint binary, credential-authenticated telemetry ingestion, persistence pipeline, packaging, or live monitoring exists. |
+| Production Windows/Linux endpoint agent | **Missing; telemetry control plane partial** | `src/endpoint-telemetry.ts` defines six strict metadata event shapes. Migrations 022–023 and routes provide tenant-bound enrollment, device credential authentication, strict batch validation, atomic telemetry persistence, canonical `security_events` normalization, durable replay enqueue, and deterministic authentication detection invocation. No endpoint binary, installer, signed update channel, device inventory, rate limiter, or live monitoring exists. Non-authentication endpoint event kinds are stored but have no dedicated detection rules. |
 | Configurable Autopilot policy storage/service/UI | **Design only** | `docs/AUTOPILOT_CONTRACT.md` is detailed; no policy schema, policy API, configuration UI, simulator or executor exists in the inspected tree. |
 | Backup scheduler, vault and restore tooling | **Design only** | `docs/BACKUP_AND_RECOVERY.md` specifies architecture and recovery gates; no backup/restore implementation or provider integration was found. |
 | AI-agent inventory and runtime monitoring | **Missing / planned** | Product strategy identifies it as a later expansion; no agent inventory or monitoring implementation was found. |
@@ -184,7 +184,7 @@ The following order minimizes the risk of building autonomy on top of an unverif
 
 Based on the inspected repository, accurate wording is:
 
-> OniShield is an early-stage cybersecurity platform foundation. Its repository includes backend code for security-event ingestion, tenant-aware database controls, operator authentication/MFA and threat-intelligence matching/review. These components remain subject to successful CI and runtime verification. Endpoint protection, deterministic detection, AI investigation, automated response, configurable Autopilot and backup/restore are still under development or at the design stage.
+> OniShield is an early-stage cybersecurity platform foundation. Its repository includes backend code for security-event ingestion, tenant-aware database controls, operator authentication/MFA and threat-intelligence matching/review. These components remain subject to successful CI and runtime verification. Endpoint protection, AI investigation, automated response, configurable Autopilot and backup/restore remain under development or at the design stage. Deterministic authentication detection and an endpoint telemetry-to-detection bridge exist in unmerged code but remain unverified.
 
 Do not claim that OniShield currently:
 - Protects Windows/Linux endpoints in production.

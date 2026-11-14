@@ -70,14 +70,28 @@ export const endpointTelemetryEventSchema = z.discriminatedUnion("kind", [
 export const endpointTelemetryBatchSchema = z.object({
   events: z.array(endpointTelemetryEventSchema).min(1).max(100)
 }).strict().superRefine((batch, context) => {
-  const identities = new Set<string>();
+  const sequenceIdentities = new Set<string>();
+  const eventIds = new Set<string>();
+  const batchAgentId = batch.events[0]?.agent_id;
   for (const [index, event] of batch.events.entries()) {
-    const identity = JSON.stringify([event.agent_id,event.boot_id,event.sequence]);
-    if (identities.has(identity)) context.addIssue({
+    const sequenceIdentity = JSON.stringify([event.agent_id,event.boot_id,event.sequence]);
+    if (sequenceIdentities.has(sequenceIdentity)) context.addIssue({
       code: z.ZodIssueCode.custom, path: ["events",index,"sequence"],
       message: "duplicate agent sequence within batch"
     });
-    identities.add(identity);
+    sequenceIdentities.add(sequenceIdentity);
+
+    if (eventIds.has(event.event_id)) context.addIssue({
+      code: z.ZodIssueCode.custom, path: ["events",index,"event_id"],
+      message: "duplicate event ID within batch"
+    });
+    eventIds.add(event.event_id);
+
+    if (event.agent_id !== batchAgentId) context.addIssue({
+      code: z.ZodIssueCode.custom, path: ["events",index,"agent_id"],
+      message: "all events in a batch must belong to the same agent"
+    });
+
     if (Date.parse(event.collected_at) < Date.parse(event.observed_at) - 300000) context.addIssue({
       code: z.ZodIssueCode.custom, path: ["events",index,"collected_at"],
       message: "collection time cannot precede observation by more than five minutes"

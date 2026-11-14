@@ -9,6 +9,7 @@ import { registerInvestigationRoutes } from "./investigation-routes.js";
 import { registerOperatorInvestigationConsole } from "./operator-console.js";
 import { hashOperatorSessionToken } from "./operator-auth-crypto.js";
 import { registerEndpointEnrollmentRoutes } from "./endpoint-enrollment-routes.js";
+import { registerEndpointTelemetryRoutes } from "./endpoint-telemetry-routes.js";
 
 function operatorBearer(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
@@ -29,6 +30,7 @@ export function registerDetectionFindingRoutes(
   authDatabase: Pick<Pool, "query"> | null
 ): void {
   registerEndpointEnrollmentRoutes(app, operatorAuth, authDatabase, authDatabase);
+  registerEndpointTelemetryRoutes(app, authDatabase);
   registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get("/v1/operator/findings", async (request, reply) => {
