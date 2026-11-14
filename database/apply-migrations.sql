@@ -22,3 +22,4 @@ REVOKE INSERT ON onishield.threat_intelligence_sources FROM onishield_app;
 \i database/migrations/017_durable_detection_replay.sql
 \i database/migrations/018_finding_lifecycle_audit.sql
 \i database/migrations/019_investigation_cases.sql
+\i database/migrations/020_investigation_analysis.sql
