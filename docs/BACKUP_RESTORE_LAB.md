@@ -146,6 +146,23 @@ The exclusive lock prevents concurrent invocations. If the host crashes or the p
 
 The runner does not configure a schedule, send alerts, or delete old backups. The scheduler must alert on non-zero exit, stale `backup-status.json`, and missing expected run windows. Do not implement local retention deletion until off-site recovery, legal holds, and minimum-copy policy are tested.
 
+
+## Backup health check
+
+Run the health check from the same protected host and environment used by the scheduler:
+
+```sh
+BACKUP_MAX_AGE_HOURS=26 npm run backup:health
+```
+
+It checks that the latest run is marked successful, the completion timestamp is within the configured age limit, the artifact and manifest still exist, the manifest identity matches the status record, and the encrypted artifact size matches the manifest. When `BACKUP_UPLOAD_REQUIRED=true`, it also requires the latest run to record a successful immutable-vault upload.
+
+The health check is suitable for a host monitor or external alerting system: exit code 0 means the recorded backup is fresh and structurally present; non-zero means the backup should be treated as unhealthy and investigated. It does not re-run full cryptographic verification or retrieve/restore the remote object. Schedule it more frequently than the backup cadence, and alert on every non-zero result.
+
+```sh
+npm run backup:health
+```
+
 ## CLI actions
 
 - `node scripts/backup-postgres.mjs create`
@@ -153,5 +170,7 @@ The runner does not configure a schedule, send alerts, or delete old backups. Th
 - `node scripts/backup-postgres.mjs restore`
 - `node scripts/backup-s3.mjs upload`
 - `node scripts/backup-s3.mjs download`
+- `npm run backup:run`
+- `npm run backup:health`
 
 All commands fail closed on missing key material, invalid manifest authentication, checksum mismatch, unknown artifact format, failed archive parsing, or unsafe restore target conditions.
