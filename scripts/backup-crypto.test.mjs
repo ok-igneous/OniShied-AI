@@ -29,3 +29,17 @@ test("backup authentication rejects a modified manifest", () => {
 test("backup keys require a 256-bit hexadecimal root key", () => {
   assert.throws(() => deriveBackupKeys("not-a-key"), /64 hexadecimal characters/);
 });
+
+test("AES-GCM rejects ciphertext modified after backup creation", () => {
+  const keys = deriveBackupKeys("ef".repeat(32));
+  const iv = randomBytes(12);
+  const cipher = createBackupCipher(keys.encryptionKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(Buffer.from("important evidence")), cipher.final()]);
+  const damaged = Buffer.from(ciphertext);
+  damaged[0] ^= 0x01;
+  const decipher = createBackupDecipher(keys.encryptionKey, iv, cipher.getAuthTag());
+  assert.throws(() => {
+    decipher.update(damaged);
+    decipher.final();
+  });
+});
