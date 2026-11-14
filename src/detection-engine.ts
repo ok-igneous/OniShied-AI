@@ -63,7 +63,7 @@ function makeFinding(input: {
   const events = [...input.events].sort((a, b) =>
     timestamp(a) - timestamp(b) || a.event_id.localeCompare(b.event_id)
   );
-  const evidenceIds = events.map((event) => event.event_id);
+  const evidenceIds = events.map((event) => `${event.source.connector_id}:${event.event_id}`);
   const groupingKeyHash = digest(input.grouping);
   const findingId = digest([
     input.ruleId,
