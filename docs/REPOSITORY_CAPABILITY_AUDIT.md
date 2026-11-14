@@ -78,7 +78,7 @@ These are meaningful building blocks. They are not equivalent to a deployed endp
 
 ### 3.2 Deterministic detection is an early demonstrator, not a production pipeline
 
-Two authentication rules now exist: eight failures within five minutes for the same tenant/host/principal/source address, and five failures followed by success within ten minutes for the same tenant/host/principal. Findings include rule version, confidence/severity, matched conditions, limitations and connector-qualified evidence references. Ingestion triggers a bounded re-evaluation and findings are stored under tenant RLS. The query is capped at 5,000 events and only covers a +/-10-minute neighborhood around the ingested event; older late arrivals need a replay process. There is no alert delivery, finding lifecycle/merge model, streaming watermark, or successful CI/runtime proof. Treat this as an unverified first implementation, not a customer-ready detection service.
+Two authentication rules now exist: eight failures within five minutes for the same tenant/host/principal/source address, and five failures followed by success within ten minutes for the same tenant/host/principal. Findings include rule version, confidence/severity, matched conditions, limitations and connector-qualified evidence references. Ingestion triggers a bounded re-evaluation and findings are stored under tenant RLS. The query is capped at 5,000 events and only covers a +/-10-minute neighborhood around the ingested event; older late arrivals need a replay process. A follow-up source correction makes event ordering deterministic when separate connectors emit the same event ID at the same timestamp; its new regression test is authored but has not run. There is no alert delivery, finding lifecycle/merge model, streaming watermark, or successful CI/runtime proof. Treat this as an unverified first implementation, not a customer-ready detection service.
 
 ### 3.3 Threat intelligence is not detection
 
@@ -110,8 +110,8 @@ The repository has a CI workflow that intends to run:
 
 The latest run observed during this update:
 
-- Workflow run: [#359](https://github.com/ok-igneous/OniShied-AI/actions/runs/43569605423)
-- Commit: `3244d008280e520b2871b6cffab8bdbdf6998c9d`
+- Workflow run: [#360](https://github.com/ok-igneous/OniShied-AI/actions/runs/43569647332)
+- Commit: `f4a0897b4d13307a6ec8192ef3a910bf24021c00`
 - Conclusion: **failure**
 - Job runner ID: `0`
 - Job steps: none
@@ -138,7 +138,7 @@ The following order minimizes the risk of building autonomy on top of an unverif
 
 - [x] Implement the first two deterministic scenarios: authentication failure burst and failure-followed-by-success.
 - [x] Add versioned finding storage, tenant RLS, authenticated findings query, connector-qualified evidence references and exact-replay idempotency.
-- [x] Add unit tests for threshold boundaries, input ordering, duplicate event replay and tenant separation.
+- [x] Add unit tests for threshold boundaries, input ordering, duplicate event replay, cross-connector tie ordering and tenant separation (authored; execution pending).
 - [ ] Restore CI execution and fix any real type, test, migration or build failures.
 - [ ] Add PostgreSQL integration tests for event-to-finding persistence and tenant isolation.
 - [ ] Add durable replay for late events outside the bounded request horizon, alert delivery, finding lifecycle/merging, and benign-event calibration.
