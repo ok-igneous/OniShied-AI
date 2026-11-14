@@ -20,6 +20,18 @@ type ClaimedJob = {
 
 async function claimOne(): Promise<ClaimedJob | null> {
   return withTenantTransaction(config.tenantId, async (client) => {
+    // A crashed worker never reaches fail(). Expired leases at the attempt
+    // ceiling must therefore be dead-lettered during reclamation.
+    await client.query(
+      `UPDATE onishield.detection_replay_jobs
+          SET status = 'dead_letter', lease_until = NULL, lease_token = NULL,
+              last_error = COALESCE(last_error, 'worker_lease_expired_at_attempt_limit'),
+              updated_at = NOW()
+        WHERE tenant_id = $1
+          AND attempts >= $2
+          AND (status = 'pending' OR (status = 'processing' AND lease_until < NOW()))`,
+      [config.tenantId, MAX_ATTEMPTS]
+    );
     const token = randomUUID();
     const result = await client.query<ClaimedJob>(
       `WITH candidate AS (
@@ -30,6 +42,7 @@ async function claimOne(): Promise<ClaimedJob | null> {
               (j.status = 'pending' AND j.available_at <= NOW())
               OR (j.status = 'processing' AND j.lease_until < NOW())
             )
+            AND j.attempts < $2
           ORDER BY j.available_at ASC, j.id ASC
           LIMIT 1
           FOR UPDATE SKIP LOCKED
@@ -37,8 +50,8 @@ async function claimOne(): Promise<ClaimedJob | null> {
        UPDATE onishield.detection_replay_jobs AS j
           SET status = 'processing',
               attempts = j.attempts + 1,
-              lease_until = NOW() + ($2 * INTERVAL '1 millisecond'),
-              lease_token = $3::uuid,
+              lease_until = NOW() + ($3 * INTERVAL '1 millisecond'),
+              lease_token = $4::uuid,
               updated_at = NOW()
          FROM candidate, onishield.security_events AS e
         WHERE j.id = candidate.id
@@ -46,7 +59,7 @@ async function claimOne(): Promise<ClaimedJob | null> {
           AND e.connector_id = j.connector_id
           AND e.event_id = j.event_id
        RETURNING j.id::text, j.lease_token::text, e.event_json, j.attempts`,
-      [config.tenantId, LEASE_MS, token]
+      [config.tenantId, MAX_ATTEMPTS, LEASE_MS, token]
     );
     return result.rows[0] ?? null;
   });
