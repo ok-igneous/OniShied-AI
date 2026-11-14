@@ -188,3 +188,8 @@ Rotation changes the active key for future backups; it does not rewrite existing
 6. Retire an old key only after an inventory proves that no retained, legal-hold, or otherwise required backup references it, and the recovery owner approves destruction. Never remove a key merely because a newer key is active.
 
 The keyring accepts 1–32 entries. IDs are restricted to 1–64 safe characters. A missing ID, malformed key, absent active key, or invalid keyring fails closed. The legacy single-key variables remain a temporary compatibility path; migrate to the keyring before performing multi-key rotation. Keyring parsing occurs in the backup CLI process, not in the API service. Do not auto-rotate keys or generate replacement keys at runtime.
+
+
+## Key-rotation recovery integration drill
+
+The PostgreSQL 16 integration test now exercises the complete rotation sequence against disposable databases: create and verify a backup with the old active key; switch the active key while retaining the old key; verify and restore that historical artifact; create a new backup and assert its manifest names the new key ID; verify and restore the new artifact; and finally remove the historical key from the test keyring and assert that verification fails closed. Both restored databases are checked for the expected application row and post-restore authentication-state invalidation. This test is authored and wired into the existing PostgreSQL integration-test step; it has not been observed passing in this environment.
