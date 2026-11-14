@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isLocalPostgresHost, postgresEnvironment } from "./backup-postgres-connection.mjs";
 import { pipeline } from "node:stream/promises";
 import {
   BACKUP_HEADER_BYTES, BACKUP_MAGIC, BACKUP_TAG_BYTES,
@@ -28,35 +29,6 @@ function databaseIdentity(value) {
     throw new Error("A valid PostgreSQL connection URL with a database name is required");
   }
   return { host: url.hostname, port: url.port || "5432", database: decodeURIComponent(url.pathname.slice(1)) };
-}
-
-function localHost(host) {
-  return ["localhost", "127.0.0.1", "::1"].includes(host.replace(/^\\[|\\]$/g, "").toLowerCase());
-}
-
-function postgresEnvironment(connectionUrl) {
-  const url = new URL(connectionUrl);
-  const host = url.hostname.replace(/^\\[|\\]$/g, "");
-  const env = { ...process.env };
-  env.PGHOST = host;
-  env.PGPORT = url.port || "5432";
-  env.PGDATABASE = decodeURIComponent(url.pathname.slice(1));
-  if (url.username) env.PGUSER = decodeURIComponent(url.username);
-  if (url.password) env.PGPASSWORD = decodeURIComponent(url.password);
-  const mappings = {
-    sslmode: "PGSSLMODE",
-    sslrootcert: "PGSSLROOTCERT",
-    sslcert: "PGSSLCERT",
-    sslkey: "PGSSLKEY",
-    application_name: "PGAPPNAME",
-    connect_timeout: "PGCONNECT_TIMEOUT",
-    options: "PGOPTIONS",
-    target_session_attrs: "PGTARGETSESSIONATTRS"
-  };
-  for (const [parameter, variable] of Object.entries(mappings)) {
-    if (url.searchParams.has(parameter)) env[variable] = url.searchParams.get(parameter);
-  }
-  return env;
 }
 
 
@@ -212,7 +184,7 @@ async function restoreBackup() {
     throw new Error("Set RESTORE_CONFIRMATION=RESTORE_TO_ISOLATED_DATABASE to authorize an isolated restore");
   }
   const target = databaseIdentity(targetUrl);
-  if (!localHost(target.host) && process.env.RESTORE_ALLOW_REMOTE_TARGET !== "YES_I_UNDERSTAND") {
+  if (!isLocalPostgresHost(target.host) && process.env.RESTORE_ALLOW_REMOTE_TARGET !== "YES_I_UNDERSTAND") {
     throw new Error("Restore target must be loopback unless RESTORE_ALLOW_REMOTE_TARGET=YES_I_UNDERSTAND is explicitly set");
   }
   const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
