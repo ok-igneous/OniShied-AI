@@ -40,7 +40,7 @@ SELECT jsonb_build_object(
 ) AS event
 FROM telemetry_smoke_agent;
 
-DO $$
+DO $telemetry_smoke$
 DECLARE first_result RECORD; retry_result RECORD; normalized_count INTEGER;
 BEGIN
   SELECT * INTO first_result FROM onishield.ingest_endpoint_telemetry(
@@ -144,7 +144,7 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='collection time outside allowed skew was accepted' THEN RAISE; END IF;
   END;
-END $;
+END $telemetry_smoke$;
 
 SELECT onishield.revoke_endpoint_agent(
   repeat('a',64),(SELECT agent_id FROM telemetry_smoke_agent),'Smoke test revocation'
