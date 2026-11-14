@@ -109,8 +109,10 @@ jobs:
         run: |
           npm run test:backup
           node --test scripts/backup-postgres.integration.test.mjs
+          node --test scripts/backup-s3.integration.test.mjs
           node --check scripts/backup-postgres.mjs
           node --check scripts/backup-s3.mjs
+          node --check scripts/backup-s3.integration.test.mjs
           node --check scripts/backup-runner.mjs
           node --check scripts/backup-health.mjs
 
