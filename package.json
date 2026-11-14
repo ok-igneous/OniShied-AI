@@ -14,7 +14,8 @@
     "test": "tsx --test src/*.test.ts",
     "check:lines": "node scripts/check-source-lines.mjs",
     "test:backup": "node --test scripts/backup-crypto.test.mjs",
-    "backup:run": "node scripts/backup-runner.mjs"
+    "backup:run": "node scripts/backup-runner.mjs",
+    "backup:health": "node scripts/backup-health.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
