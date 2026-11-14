@@ -42,7 +42,9 @@ CREATE TABLE onishield.investigation_case_findings (
     REFERENCES onishield.operator_memberships (tenant_id,id)
 );
 
-CREATE INDEX investigation_case_findings_finding_idx
+-- First release: a finding is assigned to one case only; re-parenting requires
+-- a future audited case-merge workflow rather than silent multi-case duplication.
+CREATE UNIQUE INDEX investigation_case_findings_one_case_per_finding_idx
   ON onishield.investigation_case_findings (tenant_id,finding_id);
 
 CREATE TABLE onishield.investigation_activity (
