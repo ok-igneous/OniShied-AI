@@ -4,6 +4,8 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { OperatorAuthService } from "./operator-auth-service.js";
 import { listDetectionFindings } from "./detection-finding-store.js";
+import type { Pool } from "pg";
+import { registerInvestigationRoutes } from "./investigation-routes.js";
 
 function operatorBearer(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
@@ -20,8 +22,10 @@ function connectorAuthorized(header: string | undefined): boolean {
 
 export function registerDetectionFindingRoutes(
   app: FastifyInstance,
-  operatorAuth: OperatorAuthService | null
+  operatorAuth: OperatorAuthService | null,
+  authDatabase: Pick<Pool, "query"> | null
 ): void {
+  registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get<{ Params: { findingId: string } }>(
     "/v1/operator/findings/:findingId/history",
     async (request, reply) => {

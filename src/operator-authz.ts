@@ -17,7 +17,7 @@ const ROLE_ACTIONS: Readonly<Record<OperatorRole, ReadonlySet<OperatorAction>>> 
   admin: new Set(["tenant:admin", "operator:admin", "event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read", "threat-intelligence:review"]),
   security_analyst: new Set(["event:read", "detection:read", "detection:triage", "investigation:read", "threat-intelligence:read"]),
   reviewer: new Set(["event:read", "detection:read", "investigation:read", "threat-intelligence:read", "threat-intelligence:review"]),
-  viewer: new Set(["event:read", "detection:read", "threat-intelligence:read"])
+  viewer: new Set(["event:read", "detection:read", "investigation:read", "threat-intelligence:read"])
 };
 
 export function canOperatorPerform(role: string, action: string): boolean {
