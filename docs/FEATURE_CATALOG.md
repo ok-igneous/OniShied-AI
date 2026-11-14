@@ -35,7 +35,7 @@ No item should be promoted to verified or production-ready without repeatable te
 | Identity and tenant control plane | Operator identity, organizations, memberships, roles, tenant boundaries, policy and device enrollment | Partial; backend foundation implemented, unverified |
 | Security event ingestion | Authenticated ingestion, validation, canonical event format, provenance and deduplication | Implemented in repository, unverified |
 | Event normalization | Normalize supported source events into a versioned canonical schema | Partial; schema and initial paths exist, end-to-end verification pending |
-| Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Design/roadmap; initial detection engine not implemented |
+| Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Partial; authentication burst and failure-then-success rules exist in unmerged code, unverified; no process/network/file/service rules |
 | Threat intelligence | Normalize and match indicators, preserve provenance, review indicator status | Partial; internal matching and reviewer controls implemented in code, unverified; not wired into ingestion |
 | AI investigation | Evidence-linked summaries, correlation, uncertainty, investigation recommendations | Backend case store, authenticated routes, leased analysis worker, citation validation and immutable reports authored; unverified; no dashboard or automatic case correlation |
 | Policy and approvals | Server-side authorization, risk evaluation, approvals and action governance | Design documented; complete policy service not implemented |
@@ -44,7 +44,7 @@ No item should be promoted to verified or production-ready without repeatable te
 | Backup and recovery | Encrypted, isolated backups, integrity checks, restore and disaster recovery | Technical contract documented; no scheduler, vault or restore tooling |
 | Operator experience | Desktop operations console and mobile alert/approval experience | Not implemented |
 | Reporting and audit | Searchable security history, action decisions, evidence and recovery records | Partial audit foundations; complete operator reporting not implemented |
-| Endpoint connectors | Authorized Windows/Linux telemetry collection and controlled local actions | Planned; no production endpoint agent claimed |
+| Endpoint connectors | Authorized Windows/Linux telemetry collection and controlled local actions | Partial; enrollment and credential-authenticated ingestion exist on unmerged branches, but no endpoint agent binary, installer, inventory UI or production deployment is claimed |
 | Integrations | Customer-approved security, identity, cloud and business-system integrations | Planned; integration framework and supported providers need design |
 | Subscription and OniVend integration | Optional product licensing/account integration | Product direction only; not part of the verified security foundation |
 
@@ -60,7 +60,7 @@ Target capabilities:
 - Apply narrowly scoped, policy-approved endpoint actions in later releases.
 - Support customer-controlled deployment and removal.
 
-**Status:** Planned. Device labels and remote browser/mobile token transport remain outstanding in the operator lifecycle. No production endpoint protection agent is currently claimed.
+**Status:** Enrollment and telemetry ingestion foundations are implemented in unmerged PR branches, not verified. Device inventory UI, credential rotation, agent health monitoring, signed binaries, installers and deployment remain outstanding. No production endpoint protection agent is claimed.
 
 ### 4.2 Event pipeline
 
@@ -73,7 +73,7 @@ Target workflow:
 6. Deduplicate safely and retain event lineage.
 7. Make validated events available to detection and investigation services.
 
-**Status:** Backend ingestion, schema, digest and duplicate handling exist in code; CI and end-to-end validation remain blocked.
+**Status:** Authenticated ingestion, strict Zod validation, database-side kind-specific validation, canonical persistence, idempotency, durable replay enqueue and a per-agent database event-attempt budget are authored on unmerged branches. Route and PostgreSQL tests are authored but unexecuted; a separate ingestion DB role and IP/request-level abuse controls remain outstanding.
 
 ### 4.3 Detection and alert triage
 
@@ -85,7 +85,7 @@ Target capabilities:
 - Benign counterexamples and false-positive handling.
 - Suppression, escalation and analyst disposition with audit.
 
-**Status:** Detection scenario catalogue/design exists; production detection engine and triage workflow are not implemented.
+**Status:** Two deterministic authentication rules and finding persistence/lifecycle foundations exist in unmerged code, unverified. Endpoint heartbeat/process/network/file/service events are stored but not covered by dedicated detection rules. False-positive evaluation and a complete triage workflow remain outstanding.
 
 ### 4.4 Threat intelligence
 
