@@ -242,3 +242,13 @@ test("each qualifying success creates a distinct sequence episode", () => {
   assert.equal(findings.length, 2);
   assert.notEqual(findings[0]?.finding_id, findings[1]?.finding_id);
 });
+
+
+test("a late event before the burst anchor can move the threshold anchor", () => {
+  const initial = Array.from({ length: 8 }, (_, i) => event({ id: `pre-anchor-${i}`, at: at(i * 10) }));
+  const original = evaluateDetections(initial)[0]!;
+  const lateEarlier = event({ id: "pre-anchor-late", at: at(-10) });
+  const recomputed = evaluateDetections([...initial, lateEarlier])[0]!;
+  assert.notEqual(recomputed.finding_id, original.finding_id);
+  assert.equal(recomputed.episode_anchor.event_id, "pre-anchor-6");
+});
