@@ -16,7 +16,7 @@ Initial scope is synthetic indicators and manually curated records. Automatic pu
 - `threat_indicator_matches`: tenant-owned event references and evidence paths, pinned to an exact indicator version and matcher version. Migration 014 adds `connector_id`, a composite foreign key to the canonical `(tenant_id, connector_id, event_id)` event identity, and connector-scoped replay uniqueness.
 - `detection_finding_threat_matches`: links a finding to the exact threat match and event it cites. Migration 015 enforces tenant, finding, connector and event identity with composite foreign keys and RLS.
 - Composite tenant foreign keys prevent an indicator from referencing another tenant's source or a match from referencing another tenant's indicator.
-- All three tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
+- All four threat-intelligence and finding-association tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
 - Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. The migration runner explicitly revokes the generic runtime INSERT grant on sources.
 - Runtime indicator inserts are constrained by RLS to `pending` status. Runtime cannot activate, revoke, update, or delete records.
 - Reviewer-only status transitions and append-only audit controls are specified in [THREAT_INTELLIGENCE_REVIEW.md](./THREAT_INTELLIGENCE_REVIEW.md).
