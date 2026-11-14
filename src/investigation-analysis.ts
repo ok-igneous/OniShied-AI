@@ -27,7 +27,11 @@ export const investigationAnalysisInputSchema = z.object({
     last_seen_at: z.string(),
     matched_conditions: z.unknown(),
     known_limitations: z.unknown(),
-    threat_match_total_count: z.number().int().nonnegative(),\n    threat_matches_truncated: z.boolean(),\n    evidence_total_count: z.number().int().nonnegative(),\n    evidence_truncated: z.boolean(),\n    threat_matches: z.array(z.object({
+    threat_match_total_count: z.number().int().nonnegative(),
+    threat_matches_truncated: z.boolean(),
+    evidence_total_count: z.number().int().nonnegative(),
+    evidence_truncated: z.boolean(),
+    threat_matches: z.array(z.object({
       indicator_type: z.string().max(64),
       indicator_value: z.string().max(2048),
       indicator_confidence: z.number().int().min(0).max(100),
