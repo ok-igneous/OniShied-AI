@@ -45,13 +45,13 @@ export const investigationAnalysisInputSchema = z.object({
       matched_at: z.string(),
       valid_from: z.string().nullable(),
       expires_at: z.string().nullable()
-    }).strict()).max(100),
+    }).strict()).max(20),
     evidence: z.array(z.object({
       connector_id: z.string().min(1).max(128),
       event_id: z.string().min(1).max(256),
       observed_at: z.string(),
       event_type: z.string().max(128)
-    }).strict()).max(500)
+    }).strict()).max(100)
   }).strict()).min(1).max(25)
 }).strict();
 
