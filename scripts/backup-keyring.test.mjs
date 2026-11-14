@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadBackupKeyring, resolveBackupKeys } from "./backup-keyring.mjs";
+import { signBackupManifest, verifyBackupManifestSignature } from "./backup-crypto.mjs";
 
 const oldKey = "11".repeat(32);
 const newKey = "22".repeat(32);
@@ -12,10 +13,10 @@ test("active key is selected for new backups while historical keys remain resolv
   });
   assert.equal(ring.activeKeyId, "backup-2026-11");
   assert.deepEqual(resolveBackupKeys(ring, ring.activeKeyId), resolveBackupKeys(ring, "backup-2026-11"));
-  assert.deepEqual(resolveBackupKeys(ring, "backup-2026-01"), resolveBackupKeys(
-    loadBackupKeyring({ BACKUP_ENCRYPTION_KEY: oldKey, BACKUP_ENCRYPTION_KEY_ID: "backup-2026-01" }),
-    "backup-2026-01"
-  ));
+  const historicalKeys = resolveBackupKeys(ring, "backup-2026-01");
+  const historicalManifest = signBackupManifest({ backup_id: "older-backup", key_id: "backup-2026-01" }, historicalKeys.manifestKey);
+  assert.equal(verifyBackupManifestSignature(historicalManifest, historicalKeys.manifestKey), true);
+  assert.equal(verifyBackupManifestSignature(historicalManifest, resolveBackupKeys(ring, ring.activeKeyId).manifestKey), false);
 });
 
 test("historical key lookup fails closed when an old key is omitted", () => {
