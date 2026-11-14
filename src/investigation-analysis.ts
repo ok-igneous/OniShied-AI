@@ -193,11 +193,10 @@ export function enforceInvestigationInputLimitations(
   if (input.findings.some((finding) => finding.threat_matches_truncated)) {
     required.add("The threat-intelligence match list is partial because of disclosure or result limits. An omitted match must not be interpreted as evidence that no other indicator matched.");
   }
-  const limitations = [...report.limitations];
-  for (const limitation of required) {
-    if (!limitations.includes(limitation)) limitations.push(limitation);
-  }
-  return { ...report, limitations };
+  const mandatory = [...required];
+  const optional = report.limitations.filter((limitation) => !required.has(limitation));
+  const retainedOptional = optional.slice(0, Math.max(0, 30 - mandatory.length));
+  return { ...report, limitations: [...retainedOptional, ...mandatory] };
 }
 
 function extractOutputText(response: unknown): string {
