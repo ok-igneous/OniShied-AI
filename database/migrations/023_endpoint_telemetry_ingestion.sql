@@ -88,6 +88,8 @@ BEGIN
        OR jsonb_typeof(item->'kind') IS DISTINCT FROM 'string'
        OR jsonb_typeof(item->'observed_at') IS DISTINCT FROM 'string'
        OR jsonb_typeof(item->'collected_at') IS DISTINCT FROM 'string'
+       OR NOT pg_input_is_valid(item->>'observed_at','timestamp with time zone')
+       OR NOT pg_input_is_valid(item->>'collected_at','timestamp with time zone')
        OR CASE
             WHEN jsonb_typeof(item->'sequence')='number'
              AND (item->>'sequence') ~ '^[1-9][0-9]*$'
