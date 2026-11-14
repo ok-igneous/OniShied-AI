@@ -39,8 +39,8 @@ BEGIN
       AND length(payload->>'hostname') BETWEEN 1 AND 255
       AND jsonb_typeof(payload->'capabilities')='array'
       AND jsonb_array_length(payload->'capabilities')<=5
-      AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(payload->'capabilities') x
-        WHERE x #>> '{}' NOT IN ('process_start','authentication','network_connection','file_integrity','service_change'))
+      AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(payload->'capabilities') AS capability(value)
+        WHERE capability.value #>> '{}' NOT IN ('process_start','authentication','network_connection','file_integrity','service_change'))
       AND jsonb_typeof(payload->'clock_skew_ms')='number'
       AND (payload->>'clock_skew_ms') ~ '^-?[0-9]+$'
       AND (payload->>'clock_skew_ms')::NUMERIC BETWEEN -86400000 AND 86400000;
