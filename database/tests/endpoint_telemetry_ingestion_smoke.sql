@@ -158,6 +158,11 @@ BEGIN
       event->'data' || jsonb_build_object('unexpected','value'))
      FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
   ) THEN RAISE EXCEPTION 'database accepted an unknown telemetry field'; END IF;
+  IF onishield.endpoint_telemetry_event_is_valid(
+    (SELECT event || jsonb_build_object('data',
+      event->'data' || jsonb_build_object('capabilities',jsonb_build_array(NULL)))
+     FROM telemetry_smoke_payload WHERE event->>'kind'='heartbeat')
+  ) THEN RAISE EXCEPTION 'database accepted a non-string heartbeat capability'; END IF;
 
   -- Per-device event attempts are bounded durably at the database boundary.
   INSERT INTO onishield.endpoint_telemetry_rate_limits(
