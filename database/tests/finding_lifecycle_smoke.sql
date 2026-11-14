@@ -1,6 +1,6 @@
 -- Run as a database administrator after applying all migrations.
--- Exercises a valid transition, immutable audit write, invalid transition,
--- and denial of direct status mutation by the ingestion/runtime role.
+-- Exercises valid/invalid transitions, role and step-up enforcement,
+-- immutable audit writes, history reads, and runtime column privileges.
 BEGIN;
 SET LOCAL ROLE onishield_owner;
 SELECT set_config('app.tenant_id', 'lifecycle-tenant-a', true);
@@ -51,6 +51,9 @@ SELECT * FROM onishield.transition_detection_finding(
   repeat('c', 64), repeat('a', 64), 'acknowledged',
   'Analyst accepted this finding for investigation.', 'lifecycle-smoke-valid'
 );
+SELECT * FROM onishield.list_detection_finding_status_audit(
+  repeat('c', 64), repeat('a', 64)
+);
 
 DO $$
 BEGIN
@@ -63,6 +66,58 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'Invalid lifecycle transition was accepted' THEN RAISE; END IF;
     IF SQLERRM <> 'Invalid finding status transition' THEN RAISE; END IF;
+  END;
+END $$;
+
+SET LOCAL ROLE onishield_owner;
+DO $$
+DECLARE current_status TEXT; audit_count INTEGER;
+BEGIN
+  SELECT status INTO current_status FROM onishield.detection_findings
+   WHERE tenant_id = 'lifecycle-tenant-a' AND finding_id = repeat('a', 64);
+  SELECT count(*) INTO audit_count FROM onishield.detection_finding_status_audit
+   WHERE tenant_id = 'lifecycle-tenant-a' AND finding_id = repeat('a', 64);
+  IF current_status <> 'acknowledged' OR audit_count <> 1 THEN
+    RAISE EXCEPTION 'Lifecycle update/audit mismatch: status %, audit rows %',
+      current_status, audit_count;
+  END IF;
+  UPDATE onishield.operator_memberships SET role = 'viewer'
+   WHERE tenant_id = 'lifecycle-tenant-a' AND id = 987654321;
+END $$;
+
+SET LOCAL ROLE onishield_auth;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM * FROM onishield.transition_detection_finding(
+      repeat('c', 64), repeat('a', 64), 'investigating',
+      'Viewer must not transition findings.', 'lifecycle-smoke-role-denial'
+    );
+    RAISE EXCEPTION 'Viewer role unexpectedly changed finding status';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Viewer role unexpectedly changed finding status' THEN RAISE; END IF;
+    IF SQLERRM <> 'Forbidden finding transition' THEN RAISE; END IF;
+  END;
+END $$;
+
+SET LOCAL ROLE onishield_owner;
+UPDATE onishield.operator_memberships SET role = 'security_analyst'
+ WHERE tenant_id = 'lifecycle-tenant-a' AND id = 987654321;
+UPDATE onishield.operator_sessions SET step_up_at = NOW() - INTERVAL '10 minutes'
+ WHERE token_hash = repeat('c', 64);
+
+SET LOCAL ROLE onishield_auth;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM * FROM onishield.transition_detection_finding(
+      repeat('c', 64), repeat('a', 64), 'investigating',
+      'Recent step-up is required for this transition.', 'lifecycle-smoke-step-up'
+    );
+    RAISE EXCEPTION 'Stale step-up unexpectedly authorized transition';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Stale step-up unexpectedly authorized transition' THEN RAISE; END IF;
+    IF SQLERRM <> 'Step-up authentication required' THEN RAISE; END IF;
   END;
 END $$;
 
