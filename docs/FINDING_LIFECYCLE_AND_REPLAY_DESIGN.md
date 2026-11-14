@@ -1,108 +1,262 @@
-# Finding Lifecycle and Durable Replay Design
+import type { PoolClient } from "pg";
+import type { DetectionFinding } from "./detection-engine.js";
+import { evaluateDetections } from "./detection-engine.js";
+import { securityEventSchema, type SecurityEventInput } from "./security-event.js";
+import { withTenantTransaction } from "./database.js";
+import { matchEventsIndicatorsInTransaction } from "./threat-intelligence-service.js";
 
-## Status
+async function insertFindings(
+  client: PoolClient,
+  tenantId: string,
+  findings: readonly DetectionFinding[]
+): Promise<number> {
+  let insertedCount = 0;
+  for (const finding of findings) {
+    if (finding.tenant_id !== tenantId) {
+      throw new Error("Finding tenant does not match transaction tenant");
+    }
+    const result = await client.query<{ inserted: boolean }>(
+      `INSERT INTO onishield.detection_findings AS current_finding
+        (tenant_id, finding_id, rule_id, rule_version, status, title,
+         explanation, severity, confidence, first_seen_at, last_seen_at,
+         episode_anchor_connector_id, episode_anchor_event_id,
+         evidence_event_ids, evidence_event_refs, grouping_key_hash,
+         matched_conditions, known_limitations)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+               $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb)
+       ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
+         first_seen_at = LEAST(current_finding.first_seen_at, EXCLUDED.first_seen_at),
+         last_seen_at = GREATEST(current_finding.last_seen_at, EXCLUDED.last_seen_at),
+         evidence_event_refs = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item->>'connector_id', item->>'event_id'), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements(
+               current_finding.evidence_event_refs || EXCLUDED.evidence_event_refs
+             ) AS refs(item)
+           ) AS merged
+         ),
+         evidence_event_ids = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               current_finding.evidence_event_ids || EXCLUDED.evidence_event_ids
+             ) AS ids(item)
+           ) AS merged
+         ),
+         matched_conditions = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               current_finding.matched_conditions || EXCLUDED.matched_conditions
+             ) AS conditions(item)
+           ) AS merged
+         ),
+         updated_at = NOW()
+       RETURNING (xmax = 0) AS inserted`,
+      [
+        tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
+        finding.status, finding.title, finding.explanation, finding.severity,
+        finding.confidence, finding.first_seen_at, finding.last_seen_at,
+        finding.episode_anchor.connector_id, finding.episode_anchor.event_id,
+        JSON.stringify(finding.evidence_event_ids),
+        JSON.stringify(finding.evidence_event_refs),
+        finding.grouping_key_hash,
+        JSON.stringify(finding.matched_conditions),
+        JSON.stringify(finding.known_limitations)
+      ]
+    );
+    insertedCount += result.rows.filter((row) => row.inserted).length;
 
-Stable finding episode identity and idempotent evidence persistence are implemented in the source and migration layer. Analyst lifecycle management and durable replay remain design-only.
+    for (const evidence of finding.evidence_event_refs) {
+      await client.query(
+        `INSERT INTO onishield.detection_finding_evidence
+          (tenant_id, finding_id, connector_id, event_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id, finding_id, connector_id, event_id) DO NOTHING`,
+        [tenantId, finding.finding_id, evidence.connector_id, evidence.event_id]
+      );
+    }
+  }
+  return insertedCount;
+}
 
-## Why this work is required
+async function persistFindingThreatMatches(
+  client: PoolClient,
+  tenantId: string,
+  findings: readonly DetectionFinding[],
+  evidenceEvents: readonly SecurityEventInput[]
+): Promise<void> {
+  const referenced = new Set(
+    findings.flatMap((finding) => finding.evidence_event_refs.map((ref) =>
+      JSON.stringify([ref.connector_id, ref.event_id])
+    ))
+  );
+  const selectedEvents = evidenceEvents.filter((event) =>
+    referenced.has(JSON.stringify([event.source.connector_id, event.event_id]))
+  );
+  if (selectedEvents.length === 0) return;
 
-The current detector derives `finding_id` from the exact evidence-event references. As an authentication burst grows, the evidence set can change, producing a different finding ID for the same underlying episode. The current persistence layer uses `ON CONFLICT DO NOTHING`, so it prevents exact duplicate inserts but does not merge evolving evidence into one incident.
+  // Load the tenant's active indicator set once for this evaluation batch.
+  const matches = await matchEventsIndicatorsInTransaction(
+    client,
+    tenantId,
+    selectedEvents
+  );
+  if (matches.length === 0) return;
 
-The ingestion path also evaluates only a bounded +/-10-minute neighborhood around the event being ingested. It has no durable replay queue or worker. Events older than that evaluation horizon can remain stored without ever being evaluated if no later ingestion causes the relevant neighborhood to be revisited.
+  const byEvent = new Map<string, typeof matches>();
+  for (const match of matches) {
+    const key = JSON.stringify([match.connector_id, match.event_id]);
+    const current = byEvent.get(key) ?? [];
+    current.push(match);
+    byEvent.set(key, current);
+  }
 
-Adding analyst workflow states before correcting these identity and replay limitations would create operational noise and misleading completeness.
+  for (const finding of findings) {
+    for (const evidence of finding.evidence_event_refs) {
+      const key = JSON.stringify([evidence.connector_id, evidence.event_id]);
+      for (const match of byEvent.get(key) ?? []) {
+        await client.query(
+          `INSERT INTO onishield.detection_finding_threat_matches
+            (tenant_id, finding_id, connector_id, event_id, threat_match_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (tenant_id, finding_id, threat_match_id) DO NOTHING`,
+          [
+            tenantId,
+            finding.finding_id,
+            evidence.connector_id,
+            evidence.event_id,
+            match.match_id
+          ]
+        );
+      }
+    }
+  }
+}
 
-## Decision 1: Separate incident identity from evidence identity
+/** Persists supplied findings idempotently inside an explicit tenant scope. */
+export async function persistDetectionFindings(
+  tenantId: string,
+  findings: readonly DetectionFinding[]
+): Promise<number> {
+  return withTenantTransaction(tenantId, (client) =>
+    insertFindings(client, tenantId, findings)
+  );
+}
 
-A finding/incident must have a stable identity independent of its current evidence list.
+/**
+ * Re-evaluates the bounded +/-10 minute neighborhood of an accepted event.
+ * Findings and their indicator evidence links are persisted atomically.
+ */
+export async function evaluateAndPersistAroundEvent(
+  tenantId: string,
+  event: SecurityEventInput
+): Promise<number> {
+  if (event.tenant_id !== tenantId) {
+    throw new Error("Event tenant does not match detection scope");
+  }
+  return withTenantTransaction(tenantId, async (client) => {
+    // Serialize evaluation for the exact detector grouping keys. Ingestion is
+    // already committed before this transaction starts, so a waiter sees the
+    // preceding evaluator's committed event and finding writes.
+    const principal = typeof event.data.principal_ref === "string"
+      ? event.data.principal_ref.trim() : "";
+    const host = typeof event.source.host_ref === "string"
+      ? event.source.host_ref.trim() : "";
+    const lockKeys: string[] = [];
+    if (principal && host) {
+      lockKeys.push(JSON.stringify(["sequence", tenantId, host, principal]));
+      if (event.event_type === "identity.authentication.failure") {
+        const address = typeof event.data.source_address === "string"
+          ? event.data.source_address.trim() : "";
+        if (address) lockKeys.push(JSON.stringify(["burst", tenantId, host, principal, address]));
+      }
+    }
+    for (const key of lockKeys.sort()) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
+    }
 
-The implemented identity key is SHA-256 over structured JSON containing tenant ID, rule ID, rule version, grouping-key hash, and the structured episode-anchor pair `(connector_id, event_id)`. The anchor is the first event that satisfies the rule: the eighth failure for a burst, or the qualifying success for a failure-then-success sequence. The evolving evidence set is excluded.
+    const rows = await client.query<{ event_json: unknown }>(
+      `SELECT event_json
+         FROM onishield.security_events
+        WHERE tenant_id = $1
+          AND observed_at >= $2::timestamptz - INTERVAL '10 minutes'
+          AND observed_at <= $2::timestamptz + INTERVAL '10 minutes'
+        ORDER BY observed_at ASC, connector_id ASC, event_id ASC
+        LIMIT 5000`,
+      [tenantId, event.observed_at]
+    );
 
-The identity must not include the complete evidence-event list. Evidence references remain structured pairs of `connector_id` and `event_id`; they must never be reconstructed by splitting the legacy `connector:event` display string.
+    const events: SecurityEventInput[] = [];
+    for (const row of rows.rows) {
+      const parsed = securityEventSchema.safeParse(row.event_json);
+      if (parsed.success && parsed.data.tenant_id === tenantId) {
+        events.push(parsed.data);
+      }
+    }
 
-### Episode boundary policy
+    const findings = evaluateDetections(events);
+    const insertedCount = await insertFindings(client, tenantId, findings);
+    await persistFindingThreatMatches(client, tenantId, findings, events);
+    return insertedCount;
+  });
+}
 
-A rule must explicitly define when activity belongs to the same episode and when a new episode begins. A quiet-period boundary is preferable to a calendar bucket because an arbitrary time bucket can split one continuous attack at midnight or merge separate episodes near a bucket edge.
-
-Implemented episode policy:
-- An authentication burst is anchored at the first event that completes the eight-failure threshold in a rolling five-minute window. Events whose observed time falls within five minutes after that anchor enrich that episode. A later threshold crossing after that post-trigger interval starts another episode.
-- Each qualifying success after at least five failures in the preceding ten minutes is a separate sequence episode, anchored by that success.
-- Late-arriving events after a burst anchor and inside its five-minute episode window enrich the same stable ID. A late event earlier than the anchor can change which event first crosses the threshold in a stateless recomputation; the finding records this limitation. Durable reconciliation of pre-anchor late events is deferred to the replay worker.
-- Concurrent writes for the same finding are serialized by PostgreSQL's unique-key conflict row lock; evidence rows are independently deduplicated by `(tenant_id, finding_id, connector_id, event_id)`.
-- Evidence is append-only at the structured evidence-link table. No per-finding retention cap is introduced in this milestone; operational retention and bounded replay remain future work.
-
-Do not silently merge events across tenants, rules, grouping keys, or unrelated episodes.
-
-## Decision 2: Preserve evidence as append-only history
-
-When new qualifying events are found for an existing episode:
-- retain the stable incident identity;
-- append only previously unseen structured event references;
-- update first/last observed timestamps using deterministic min/max rules;
-- retain the rule version and detection explanation that produced each material change;
-- link threat-intelligence matches to the exact connector/event identity;
-- never overwrite the original evidence history to make the finding appear smaller.
-
-The implementation must be idempotent under connector retries and worker retries. A repeated evaluation must not duplicate evidence links or create another incident for the same episode.
-
-## Decision 3: Analyst lifecycle and authorization
-
-The intended lifecycle is:
-- `open`: newly detected and awaiting triage;
-- `acknowledged`: an authorized analyst has accepted ownership;
-- `investigating`: active investigation is underway;
-- `resolved`: the analyst has recorded that the incident is no longer active;
-- `reopened`: new qualifying evidence or an authorized analyst reopens a resolved incident.
-
-A transition must be validated against an explicit transition table. A client must not be allowed to set arbitrary status values or change tenant ownership.
-
-Every manual transition must record:
-- tenant and stable finding ID;
-- previous and new status;
-- authenticated operator ID;
-- timestamp;
-- mandatory reason;
-- request/correlation identifier where available.
-
-The audit log must be append-only for the runtime application role. Status changes must be performed through a database function that validates the operator session, tenant membership, role, and recent step-up authentication. Connector bearer authentication is not analyst authentication and must not authorize lifecycle mutations.
-
-The existing operator permission `detection:triage` is the intended application authorization gate. The database function must independently enforce the security boundary rather than trusting only the HTTP route.
-
-## Decision 4: Durable replay
-
-Replay must not be an unauthenticated public endpoint and must not depend on a connector sending another event to trigger evaluation.
-
-The preferred architecture is a durable tenant-scoped work queue:
-- enqueue work transactionally with event persistence or through a reliable database outbox;
-- claim bounded work using row locking and `SKIP LOCKED`;
-- use bounded batches and explicit retry/backoff;
-- record attempts, last error category, and completion state;
-- ensure worker retries are safe through stable incident identity and idempotent evidence writes;
-- apply tenant isolation to queue reads and writes;
-- expose operational metrics for backlog age, retries, and terminal failures.
-
-Replay must cover stored events outside the current +/-10-minute ingestion neighborhood. It must use the same versioned deterministic rules as live evaluation, with a defined policy for historical rule versions and late-arriving events.
-
-Do not add an HTTP route that lets a caller submit arbitrary tenant IDs, timestamps, or unbounded replay ranges. Worker scope must be established server-side.
-
-## Required implementation sequence
-
-1. ~~Add tests that demonstrate the current changing-evidence identity defect.~~ Completed with stable-anchor, episode-boundary, and out-of-order evidence tests.
-2. ~~Implement stable episode identity and concurrency-safe evidence upserts.~~ Implemented stable anchor IDs, conflict-update evidence union, and structured evidence rows.
-3. ~~Add migration constraints and indexes for episode uniqueness and evidence idempotency.~~ Migration 016 adds anchor columns, exact event foreign keys, tenant RLS, and unique evidence identity.
-4. Add append-only lifecycle audit storage and a database-enforced transition function.
-5. Add operator-authenticated lifecycle routes using `detection:triage`; require recent step-up for mutations.
-6. Add a durable replay queue and bounded worker with retry semantics.
-7. Add database smoke tests for tenant isolation, role denial, step-up expiry, transition validity, evidence idempotency, concurrent updates, and replay retry behavior.
-8. Run the full CI pipeline, migration suite, typecheck, and build before claiming the milestone is verified.
-
-## Explicit non-goals
-
-This milestone does not authorize automatic blocking, account disabling, endpoint isolation, or other disruptive response actions. Detection findings and threat-intelligence matches are investigative signals, not proof of compromise. Autopilot remains disabled for disruptive actions until detection correctness, replay completeness, analyst controls, and response safeguards have been independently validated.
-
-## Verification status
-
-- Implemented: stable episode-anchor identity in the detector; explicit burst and sequence episode boundaries; deterministic tests for later and out-of-order evidence; conflict-safe JSON evidence union; structured evidence rows with tenant-scoped foreign keys, uniqueness, and RLS; migration 016 and migration smoke-test coverage.
-- Not implemented: durable replay/reconciliation for events arriving before an existing episode anchor; analyst lifecycle transitions/audit; lifecycle routes; queue/worker; evidence retention controls.
-- Tests, typecheck, build, and database migrations have not been executed in this environment.
-- GitHub Actions has previously been blocked before runner allocation by the account billing/spending restriction. A workflow that never starts does not establish whether the code passes or fails.
+/** Lists findings with only their exact, tenant-scoped threat-match evidence. */
+export async function listDetectionFindings(
+  tenantId: string,
+  limit = 100
+): Promise<unknown[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+    throw new Error("Finding limit must be between 1 and 500");
+  }
+  return withTenantTransaction(tenantId, async (client) => {
+    const result = await client.query(
+      `SELECT f.finding_id, f.rule_id, f.rule_version, f.status, f.title,
+              f.explanation, f.severity, f.confidence, f.first_seen_at,
+              f.last_seen_at, f.episode_anchor_connector_id, f.episode_anchor_event_id,
+              f.evidence_event_ids, f.evidence_event_refs,
+              f.grouping_key_hash, f.matched_conditions, f.known_limitations,
+              f.created_at, f.updated_at,
+              COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'connector_id', l.connector_id,
+                    'event_id', l.event_id,
+                    'indicator_id', m.indicator_id::text,
+                    'indicator_version', m.indicator_version,
+                    'indicator_type', i.indicator_type,
+                    'matched_field_path', m.matched_field_path,
+                    'confidence', i.confidence,
+                    'tlp', i.tlp,
+                    'indicator_status', i.status,
+                    'source_id', i.source_id::text,
+                    'matcher_version', m.matcher_version,
+                    'matched_at', m.matched_at
+                  ) ORDER BY m.matched_at DESC
+                )
+                FROM onishield.detection_finding_threat_matches AS l
+                JOIN onishield.threat_indicator_matches AS m
+                  ON m.id = l.threat_match_id
+                 AND m.tenant_id = l.tenant_id
+                 AND m.connector_id = l.connector_id
+                 AND m.event_id = l.event_id
+                JOIN onishield.threat_indicators AS i
+                  ON i.tenant_id = m.tenant_id
+                 AND i.id = m.indicator_id
+                 AND i.version = m.indicator_version
+                WHERE l.tenant_id = f.tenant_id
+                  AND l.finding_id = f.finding_id
+              ), '[]'::jsonb) AS threat_intelligence_matches
+         FROM onishield.detection_findings AS f
+        WHERE f.tenant_id = $1
+        ORDER BY f.last_seen_at DESC, f.id DESC
+        LIMIT $2`,
+      [tenantId, limit]
+    );
+    return result.rows;
+  });
+}
