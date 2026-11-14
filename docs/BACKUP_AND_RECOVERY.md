@@ -70,7 +70,7 @@ Until measured, RPO/RTO are **TBD**. Do not advertise zero data loss or instant 
 6. Restore into an isolated clean environment with no production connectors or response credentials.
 7. Apply required migrations and run integrity, tenant-isolation, identity, and audit-consistency checks.
 8. Determine whether the recovery point contains attacker-controlled persistence, poisoned configuration, or compromised credentials.
-9. Invalidate all restored operator sessions and pending one-time authentication/action tokens before application startup; rotate credentials and keys as required; re-enroll connectors and devices instead of blindly restoring trust.
+9. Invalidate all restored operator sessions, pending one-time authentication/action tokens, pending MFA enrollments and unused MFA recovery codes before application startup; require operators to re-enroll recovery codes, rotate credentials and keys as required, and re-enroll connectors and devices instead of blindly restoring trust.
 10. Obtain an authorized recovery approval and switch traffic in a controlled manner.
 11. Re-enable collection first; keep Autopilot and response execution disabled until explicitly reviewed.
 12. Verify service health, event continuity, audit continuity, and customer-visible status; document data loss and recovery actions.
@@ -114,4 +114,4 @@ A backup is not marked healthy solely because the provider reports upload succes
 
 ## 10. Initial implementation exclusions
 
-The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, archive verification, and guarded restore into a new empty isolated database. The archive necessarily contains high-sensitivity database authentication verifiers and encrypted MFA secret material; restored sessions and one-time tokens must be invalidated before service startup. It does not provide a customer-facing dashboard, scheduler, off-site/immutable vault, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. The CLI is authored but not executed; see [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md).
+The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, archive verification, and guarded restore into a new empty isolated database. The archive necessarily contains high-sensitivity database authentication verifiers and encrypted MFA secret material; the lab restore CLI revokes restored sessions, consumes pending one-time tokens, clears pending MFA enrollment, and invalidates unused MFA recovery codes before service startup. It does not provide a customer-facing dashboard, scheduler, off-site/immutable vault, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. The CLI is authored but not executed; see [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md).
