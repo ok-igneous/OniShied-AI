@@ -4,18 +4,18 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isLocalPostgresHost, postgresEnvironment } from "./backup-postgres-connection.mjs";
+import { loadBackupKeyring, resolveBackupKeys } from "./backup-keyring.mjs";
 import { pipeline } from "node:stream/promises";
 import {
   BACKUP_HEADER_BYTES, BACKUP_MAGIC, BACKUP_TAG_BYTES,
-  createBackupCipher, createBackupDecipher, deriveBackupKeys,
+  createBackupCipher, createBackupDecipher,
   signBackupManifest, verifyBackupManifestSignature
 } from "./backup-crypto.mjs";
 
 const action = process.argv[2];
 const backupDirectory = path.resolve(process.env.BACKUP_DIRECTORY || "./var/backups");
 const databaseUrl = process.env.DATABASE_URL;
-const masterKey = process.env.BACKUP_ENCRYPTION_KEY;
-const keyId = process.env.BACKUP_ENCRYPTION_KEY_ID;
+const keyring = loadBackupKeyring();
 
 function required(value, name) {
   if (!value) throw new Error(`${name} is required`);
@@ -47,10 +47,9 @@ async function readBackup(artifactPath, manifestPath) {
       info.size < BACKUP_HEADER_BYTES + BACKUP_TAG_BYTES + 1) {
     throw new Error("Backup manifest or artifact size is invalid");
   }
-  const keys = deriveBackupKeys(required(masterKey, "BACKUP_ENCRYPTION_KEY"));
-  if (manifest.key_id !== required(keyId, "BACKUP_ENCRYPTION_KEY_ID") ||
-      !verifyBackupManifestSignature(manifest, keys.manifestKey)) {
-    throw new Error("Backup manifest authentication failed or key ID does not match");
+  const keys = resolveBackupKeys(keyring, manifest.key_id);
+  if (!verifyBackupManifestSignature(manifest, keys.manifestKey)) {
+    throw new Error("Backup manifest authentication failed");
   }
   if (await hashFile(artifactPath) !== manifest.encrypted_sha256) {
     throw new Error("Encrypted backup checksum mismatch");
@@ -81,8 +80,8 @@ function decryptedStream(artifactPath, info, iv, tag, encryptionKey) {
 
 async function createBackup() {
   required(databaseUrl, "DATABASE_URL");
-  required(keyId, "BACKUP_ENCRYPTION_KEY_ID");
-  const keys = deriveBackupKeys(required(masterKey, "BACKUP_ENCRYPTION_KEY"));
+  const keyId = keyring.activeKeyId;
+  const keys = resolveBackupKeys(keyring, keyId);
   await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
   await chmod(backupDirectory, 0o700);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}`;
