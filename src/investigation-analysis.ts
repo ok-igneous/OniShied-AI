@@ -28,7 +28,21 @@ export const investigationAnalysisInputSchema = z.object({
     matched_conditions: z.unknown(),
     known_limitations: z.unknown(),
     threat_matches: z.array(z.object({
-      indicator_type: z.string().max(64),\n      indicator_value: z.string().max(2048),\n      indicator_confidence: z.number().int().min(0).max(100),\n      tlp: z.string().max(32),\n      indicator_status: z.string().max(32),\n      indicator_version: z.number().int(),\n      source_name: z.string().max(256),\n      source_kind: z.string().max(64),\n      matcher_version: z.string().max(64),\n      matched_field_path: z.string().max(512),\n      matched_at: z.string(),\n      valid_from: z.string().nullable(),\n      expires_at: z.string().nullable()\n    }).strict()).max(100),\n    evidence: z.array(z.object({
+      indicator_type: z.string().max(64),
+      indicator_value: z.string().max(2048),
+      indicator_confidence: z.number().int().min(0).max(100),
+      tlp: z.string().max(32),
+      indicator_status: z.string().max(32),
+      indicator_version: z.number().int(),
+      source_name: z.string().max(256),
+      source_kind: z.string().max(64),
+      matcher_version: z.string().max(64),
+      matched_field_path: z.string().max(512),
+      matched_at: z.string(),
+      valid_from: z.string().nullable(),
+      expires_at: z.string().nullable()
+    }).strict()).max(100),
+    evidence: z.array(z.object({
       connector_id: z.string().min(1).max(128),
       event_id: z.string().min(1).max(256),
       observed_at: z.string(),
