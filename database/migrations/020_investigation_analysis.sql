@@ -186,7 +186,11 @@ BEGIN
         'title',f.title,'explanation',f.explanation,'severity',f.severity,
         'confidence',f.confidence,'first_seen_at',f.first_seen_at,'last_seen_at',f.last_seen_at,
         'matched_conditions',f.matched_conditions,'known_limitations',f.known_limitations,
-        'evidence_total_count',(SELECT count(*) FROM onishield.detection_finding_evidence ec\n          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),\n        'evidence_truncated',(SELECT count(*)>100 FROM onishield.detection_finding_evidence ec\n          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),\n        'evidence',COALESCE((
+        'evidence_total_count',(SELECT count(*) FROM onishield.detection_finding_evidence ec
+          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),
+        'evidence_truncated',(SELECT count(*)>100 FROM onishield.detection_finding_evidence ec
+          WHERE ec.tenant_id=f.tenant_id AND ec.finding_id=f.finding_id),
+        'evidence',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'connector_id',e.connector_id,'event_id',e.event_id,
             'observed_at',e.observed_at,'event_type',e.event_type
@@ -200,7 +204,11 @@ BEGIN
             ORDER BY ev.observed_at,e.connector_id,e.event_id LIMIT 100
           ) e
         ),'[]'::jsonb),
-        'threat_match_total_count',(SELECT count(*) FROM onishield.detection_finding_threat_matches tc\n          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),\n        'threat_matches_truncated',(SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc\n          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),\n        'threat_matches',COALESCE((
+        'threat_match_total_count',(SELECT count(*) FROM onishield.detection_finding_threat_matches tc
+          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
+        'threat_matches_truncated',(SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc
+          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
+        'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'indicator_type',match_data.indicator_type,
             'indicator_value',match_data.value_normalized,
