@@ -38,6 +38,7 @@ No item should be promoted to verified or production-ready without repeatable te
 | Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Design/roadmap; initial detection engine not implemented |
 | Threat intelligence | Normalize and match indicators, preserve provenance, review indicator status | Partial; internal matching and reviewer controls implemented in code, unverified; not wired into ingestion |
 | AI investigation | Evidence-linked summaries, correlation, uncertainty, investigation recommendations | Contract/design only; investigation service not implemented |
+| Adaptive intelligence learning | Convert AI discoveries and verified outcomes into reviewed, tested, versioned native knowledge | Design documented in `ADAPTIVE_INTELLIGENCE_LEARNING.md`; no learning pipeline implemented |
 | Policy and approvals | Server-side authorization, risk evaluation, approvals and action governance | Design documented; complete policy service not implemented |
 | Response execution | Narrow typed actions, idempotency, verification, rollback and audit | Not implemented |
 | Configurable Autopilot | Tenant-controlled, risk-bounded automation with OFF default and emergency pause | Technical contract documented; no policy schema, UI or executor |
@@ -47,6 +48,12 @@ No item should be promoted to verified or production-ready without repeatable te
 | Endpoint connectors | Authorized Windows/Linux telemetry collection and controlled local actions | Planned; no production endpoint agent claimed |
 | Integrations | Customer-approved security, identity, cloud and business-system integrations | Planned; integration framework and supported providers need design |
 | Subscription and OniVend integration | Optional product licensing/account integration | Product direction only; not part of the verified security foundation |
+
+## 3.1 Adaptive intelligence learning
+
+OniShield is intended to improve through AI investigation candidates, verified incident outcomes, operator corrections, approved threat intelligence, and controlled lab replay. Candidate knowledge must be quarantined, provenance-backed, tenant-scoped, replay-tested, human-reviewed, versioned, monitored, and reversible before native detection can consume it. AI cannot approve its own candidates or directly change production rules, Autopilot policy, or response permissions. Cross-tenant learning is disabled by default and requires a separate opt-in, privacy, licensing, and authorization design.
+
+**Status:** Design documented; no learning pipeline is implemented.
 
 ## 4. Security operations capabilities
 
