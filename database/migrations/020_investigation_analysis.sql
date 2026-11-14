@@ -214,8 +214,6 @@ BEGIN
         ),'[]'::jsonb),
         'threat_match_total_count',(SELECT count(*) FROM onishield.detection_finding_threat_matches tc
           WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
-        'threat_matches_truncated',(SELECT count(*)>20 FROM onishield.detection_finding_threat_matches tc
-          WHERE tc.tenant_id=f.tenant_id AND tc.finding_id=f.finding_id),
         'threat_matches_withheld_count',(SELECT count(*)
           FROM onishield.detection_finding_threat_matches tc
           JOIN onishield.threat_indicator_matches tim
