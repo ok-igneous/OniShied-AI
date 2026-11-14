@@ -1,7 +1,22 @@
 # Implementation Status
 
-**Last updated:** 2026-11-13  
+**Last updated:** 2026-11-14  
 **Environment:** Repository changes are being made through GitHub; the founder currently has no working development PC.
+
+## Additional implementation on stacked pull-request branches (not merged)
+
+The following work exists on an open PR stack based on `main`; it is not yet part of the default branch and is not verified in a running environment:
+
+- PR #21: stable finding episode identity, explicit episode boundaries, structured evidence references, idempotent evidence merging, and concurrency serialization.
+- PR #22: tenant-scoped durable detection replay queue and separate leased worker with bounded retries/dead-letter handling.
+- PR #23: operator-controlled finding lifecycle transitions with database-enforced roles, recent step-up authentication, and append-only status audit.
+- PR #24: tenant-scoped investigation cases, finding associations, evidence/activity retrieval, and case-level access controls.
+- PR #25: evidence-grounded AI investigation worker, strict structured output validation, canonical evidence citation checks, TLP:CLEAR-only external threat metadata, immutable report history, and human-approval-only recommendations.
+- PR #26: early operator investigation console at `/operator`, using an existing operator session token; includes case creation, case review, finding association, notes, lifecycle transitions, and AI report review.
+- PR #27: operator-authenticated tenant-scoped finding discovery and selection, so analysts can search indexed title prefixes or exact finding IDs when creating cases.
+
+PRs #21–27 are open and must be merged in dependency order. Migrations 016–021 and the associated SQL smoke tests have not been applied/executed. Typecheck, build, unit tests, browser testing, and successful CI have not been observed. The console does not provide its own password/MFA login and is not a production SOC interface. AI output is advisory and cannot execute response actions.
+
 
 ## Implemented in the repository
 

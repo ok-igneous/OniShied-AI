@@ -18,6 +18,17 @@
 <section class="layout">
 <aside class="panel stack"><div class="bar"><h2 style="margin:0;flex:1">Investigation cases</h2><button class="secondary" id="refresh">Refresh</button></div><div id="cases" class="cases"><p class="muted">Connect to load cases.</p></div>
 <div class="stack" style="border-top:1px solid var(--line);padding-top:14px">
+<h2>Findings</h2>
+<p class="muted">Search tenant-scoped findings. Select “Add ID” to use a finding when creating a case.</p>
+<input id="findingSearch" maxlength="100" placeholder="Search title prefix or exact finding ID">
+<div class="bar">
+<select id="findingStatus" aria-label="Finding status"><option value="">Any status</option><option>open</option><option>acknowledged</option><option>investigating</option><option>resolved</option><option>reopened</option><option>suppressed</option></select>
+<select id="findingSeverity" aria-label="Finding severity"><option value="">Any severity</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+<button class="secondary" id="searchFindings">Search findings</button>
+</div>
+<div id="findingResults" class="stack"><p class="muted">Connect, then search findings.</p></div>
+</div>
+<div class="stack" style="border-top:1px solid var(--line);padding-top:14px">
 <h2>Create case from findings</h2>
 <input id="newCaseTitle" maxlength="160" placeholder="Case title">
 <textarea id="newCaseFindingIds" placeholder="Finding IDs (one per line or comma-separated; maximum 25)"></textarea>
@@ -72,6 +83,39 @@ $('createCase').onclick=()=>act(async()=>{
  $('newCaseTitle').value='';$('newCaseFindingIds').value='';$('newCaseReason').value='';
  await loadCases();await openCase(result.caseId);
 });
+function addFindingToDraft(id){
+ const ids=$('newCaseFindingIds').value.split(/[\\s,]+/).filter(Boolean);
+ if(ids.includes(id)){say('That finding is already selected.');return}
+ if(ids.length>=25){say('A case can contain at most 25 findings.',true);return}
+ $('newCaseFindingIds').value=[...ids,id].join('\\n');
+ say('Finding ID added to the case draft.');
+}
+async function searchFindings(){
+ const params=new URLSearchParams({limit:'50'});
+ if($('findingSearch').value.trim())params.set('q',$('findingSearch').value.trim());
+ if($('findingStatus').value)params.set('status',$('findingStatus').value);
+ if($('findingSeverity').value)params.set('severity',$('findingSeverity').value);
+ const data=await api('/v1/operator/findings?'+params.toString());
+ const host=$('findingResults');host.replaceChildren();
+ const findings=Array.isArray(data.findings)?data.findings:[];
+ if(!findings.length){const p=document.createElement('p');p.className='muted';p.textContent='No findings match this search.';host.append(p);return}
+ for(const finding of findings){
+  const card=document.createElement('div');card.className='case';
+  const title=document.createElement('strong');title.textContent=finding.title||finding.rule_id||'Untitled finding';
+  const meta=document.createElement('div');meta.className='muted';
+  meta.textContent=[finding.severity,finding.status,finding.rule_id].filter(Boolean).join(' • ');
+  const id=document.createElement('small');id.textContent=finding.finding_id;
+  const evidence=document.createElement('small');evidence.className='muted';
+  evidence.textContent='Evidence references: '+(Array.isArray(finding.evidence_event_refs)?finding.evidence_event_refs.length:0);
+  const action=document.createElement('button');action.type='button';action.className='secondary';action.textContent='Add ID';
+  action.disabled=Boolean(finding.associated_case_id);
+  if(finding.associated_case_id){action.textContent='Already in a case'}
+  action.addEventListener('click',()=>addFindingToDraft(finding.finding_id));
+  card.append(title,meta,id,evidence,action);host.append(card);
+ }
+}
+$('searchFindings').onclick=()=>act(searchFindings);
+$('findingSearch').addEventListener('keydown',event=>{if(event.key==='Enter')act(searchFindings)});
 $('associateFinding').onclick=()=>act(async()=>{
  if(!selected)throw Error('Select a case first.');
  const findingId=$('associateFindingId').value.trim(),reason=$('associateFindingReason').value.trim();
