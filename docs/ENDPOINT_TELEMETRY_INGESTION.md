@@ -6,7 +6,7 @@
 - Tenant, agent ID, platform and agent version are bound to the credential-bound database row. Heartbeat hostname must match enrollment. The request cannot select a tenant or another agent; client-supplied future timestamps beyond five minutes are rejected.
 - Requests use the strict telemetry discriminated union and are bounded to 1–100 events; Fastify's body limit is 256 KiB.
 - Persistence is atomic per batch. Each event is unique by tenant + agent + boot + sequence and by tenant + agent + event ID.
-- Exact retries are idempotent. Reuse of a sequence with different content or a different event ID is rejected.
+- Exact retries are idempotent. Reuse of a sequence with different content or a different event ID is rejected. An exact retry can reset a dead-lettered detection job and re-run pending detection without creating a second telemetry or canonical event.
 - Revoked and quarantined credentials are rejected. The device row is locked during ingestion so revocation and ingestion serialize.
 - Each newly accepted telemetry event is normalized into the canonical `security_events` envelope, using a stable connector identity `endpoint:<agent UUID>`. Authentication success/failure maps to the existing `identity.authentication.*` event types; other telemetry maps to namespaced endpoint event types.
 - A detection replay job is enqueued in the same database transaction as both telemetry and canonical security-event persistence. The API then attempts synchronous deterministic evaluation. If evaluation fails, the durable replay job remains pending.
