@@ -427,13 +427,17 @@ app.post("/v1/events", async (request, reply) => {
       if (existing.rows[0]?.payload_sha256 !== payloadDigest) {
         return "event_id_conflict" as const;
       }
-      // Ensure a prior event whose detection job was completed/dead-lettered
-      // can be safely re-enqueued by an explicit connector retry.
+      // An explicit retry may release a dead-lettered job. Completed work is
+      // not reopened, and active leases are never stolen by connector retries.
       await client.query(
         `INSERT INTO onishield.detection_replay_jobs
           (tenant_id, connector_id, event_id)
          VALUES ($1, $2, $3)
-         ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING`,
+         ON CONFLICT (tenant_id, connector_id, event_id) DO UPDATE
+           SET status = 'pending', attempts = 0, available_at = NOW(),
+               lease_until = NULL, lease_token = NULL,
+               last_error = NULL, updated_at = NOW()
+         WHERE onishield.detection_replay_jobs.status = 'dead_letter'`,
         [config.tenantId, config.connectorId, event.event_id]
       );
       return "duplicate" as const;
