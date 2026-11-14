@@ -111,6 +111,7 @@ jobs:
           node --test scripts/backup-postgres.integration.test.mjs
           node --check scripts/backup-postgres.mjs
           node --check scripts/backup-s3.mjs
+          node --check scripts/backup-runner.mjs
 
       - name: Type-check
         run: npm run typecheck
