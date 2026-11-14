@@ -88,18 +88,11 @@ BEGIN
        OR jsonb_typeof(item->'kind') IS DISTINCT FROM 'string'
        OR jsonb_typeof(item->'observed_at') IS DISTINCT FROM 'string'
        OR jsonb_typeof(item->'collected_at') IS DISTINCT FROM 'string'
-       OR NOT pg_input_is_valid(item->>'observed_at','timestamp with time zone')
-       OR NOT pg_input_is_valid(item->>'collected_at','timestamp with time zone')
        OR CASE
             WHEN jsonb_typeof(item->'sequence')='number'
              AND (item->>'sequence') ~ '^[1-9][0-9]*$'
             THEN (item->>'sequence')::NUMERIC > 9007199254740991
             ELSE TRUE
-          END
-       OR item->>'kind' NOT IN (
-         'heartbeat','process_start','authentication','network_connection','file_integrity','service_change'
-       ) THEN
-            ELSE true
           END
        OR item->>'kind' NOT IN (
          'heartbeat','process_start','authentication','network_connection','file_integrity','service_change'
@@ -238,3 +231,8 @@ BEGIN
      SET last_seen_at=GREATEST(COALESCE(current_agent.last_seen_at,'-infinity'::TIMESTAMPTZ),NOW())
    WHERE current_agent.tenant_id=trusted.tenant_id AND current_agent.id=trusted.id;
   RETURN QUERY SELECT inserted_count,duplicates,trusted.id,trusted.tenant_id,normalized_events;
+END; $$;
+REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) TO onishield_auth;
+
+COMMIT;
