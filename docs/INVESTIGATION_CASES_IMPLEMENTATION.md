@@ -31,7 +31,7 @@
 - Analysis requests require an authenticated owner/admin/security_analyst session and a recent five-minute step-up. Requests are deduplicated per active case, limited to one per case every ten minutes, and capped at 30 per tenant per hour.
 - The separate worker uses the OpenAI Responses API with strict JSON Schema output. Configure OPENAI_API_KEY and OPENAI_MODEL; neither setting is required for the API server to start.
 - The worker receives bounded case/finding metadata, canonical event references and timestamps, and TLP:CLEAR threat-intelligence provenance only. TLP:GREEN, TLP:AMBER, and TLP:RED matches are withheld from the external provider and counted in the report input. Raw event payloads, credentials, and operator notes are not sent.
-- Model output is Zod-validated; every evidence citation must exactly match a canonical connector_id/event_id pair and timeline timestamps must match canonical event timestamps.
+- Model output is Zod-validated; every evidence citation must exactly match a canonical connector_id/event_id pair and timeline timestamps must match canonical event timestamps. Server-side post-processing enforces explicit limitation disclosures whenever evidence or threat-intelligence context was truncated or withheld; the model cannot silently omit those warnings.
 - Reports are versioned and append-only. A database trigger rejects report UPDATE and DELETE. Report metadata records provider, model, template version, and evidence digest.
 - The worker has no tools or response execution path. Recommendations are advisory and every recommendation requires human approval.
 - New routes: POST /v1/operator/investigations/:caseId/analyze and GET /v1/operator/investigations/:caseId/reports. Worker command: npm run start:investigation-worker.
@@ -44,7 +44,7 @@
 - Authorized analysts can request finding-status transitions with a reason. The database enforces role permissions and recent step-up authentication; the UI reports a step-up-required response rather than bypassing that control.
 - The console requests AI analysis, checks queue status, and loads immutable report history.
 - API calls use same-origin authenticated endpoints and no-store caching. The page sets a restrictive Content Security Policy and does not load third-party scripts, fonts, images, or analytics.
-- The console is an operational first slice, not a complete SOC dashboard. It still lacks an in-console password/MFA login flow, finding discovery/search view, case assignment and status workflow, and alert delivery.
+- The console is an operational first slice, not a complete SOC dashboard. It still lacks an in-console password/MFA login flow, case assignment and status workflow, and alert delivery.
 
 ## Deliberate limitations
 
