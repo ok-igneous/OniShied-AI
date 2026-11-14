@@ -91,7 +91,7 @@ Required environment:
 - `S3_FORCE_PATH_STYLE=true`: optional path-style addressing for compatible endpoints that require it.
 - `S3_PREFIX`: optional object prefix (defaults to `onishield/postgres`).
 - `S3_RETENTION_DAYS`: compliance retention in days (defaults to 90; accepted range 1–3650).
-- Standard AWS SDK credentials: prefer workload identity/role credentials; never commit static credentials.
+- Standard AWS SDK credentials: prefer workload identity/role credentials; never commit static credentials. A custom endpoint must use HTTPS. Scope the uploader identity to the backup prefix with bucket-versioning/object-lock read permissions, object upload and multipart-abort permissions, object-retention permission, and object read permission for post-upload HEAD checks; do not grant delete, retention-bypass, or bucket-configuration mutation permissions.
 
 After a local backup has been created, run the uploader with the exact artifact and manifest paths:
 
