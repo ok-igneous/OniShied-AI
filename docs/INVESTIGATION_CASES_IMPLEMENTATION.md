@@ -25,9 +25,9 @@
 ## AI analysis pipeline (migration 020)
 
 - Durable tenant-scoped analysis jobs with lease tokens, expiry recovery, bounded retries, and dead-letter state.
-- Analysis requests require an authenticated owner/admin/security_analyst session and a recent five-minute step-up.
+- Analysis requests require an authenticated owner/admin/security_analyst session and a recent five-minute step-up. Requests are deduplicated per active case, limited to one per case every ten minutes, and capped at 30 per tenant per hour.
 - The separate worker uses the OpenAI Responses API with strict JSON Schema output. Configure OPENAI_API_KEY and OPENAI_MODEL; neither setting is required for the API server to start.
-- The worker receives bounded case/finding metadata, canonical event references and timestamps, and linked threat-intelligence provenance. Raw event payloads, credentials, and operator notes are not sent.
+- The worker receives bounded case/finding metadata, canonical event references and timestamps, and TLP:CLEAR threat-intelligence provenance only. TLP:GREEN, TLP:AMBER, and TLP:RED matches are withheld from the external provider and counted in the report input. Raw event payloads, credentials, and operator notes are not sent.
 - Model output is Zod-validated; every evidence citation must exactly match a canonical connector_id/event_id pair and timeline timestamps must match canonical event timestamps.
 - Reports are versioned and append-only. A database trigger rejects report UPDATE and DELETE. Report metadata records provider, model, template version, and evidence digest.
 - The worker has no tools or response execution path. Recommendations are advisory and every recommendation requires human approval.
