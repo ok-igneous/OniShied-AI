@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, rename, rm, stat, chmod } from "node:fs/promises";
+import { mkdir, open, rename, rm, stat, chmod, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,11 +14,9 @@ function writeCommand(command, args, env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
-    let stderr = "";
     child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", () => {});
     child.stdout.on("data", chunk => { stdout = (stdout + chunk).slice(-65536); });
-    child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-8192); });
     child.once("error", () => reject(new Error(`Unable to start ${path.basename(command)}`)));
     child.once("close", code => code === 0
       ? resolve(stdout)
