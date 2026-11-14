@@ -402,7 +402,16 @@ app.post("/v1/events", async (request, reply) => {
         ]
       );
 
-      if (inserted.rowCount === 1) return "accepted" as const;
+      if (inserted.rowCount === 1) {
+        await client.query(
+          `INSERT INTO onishield.detection_replay_jobs
+            (tenant_id, connector_id, event_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING`,
+          [config.tenantId, config.connectorId, event.event_id]
+        );
+        return "accepted" as const;
+      }
 
       const existing = await client.query<{ payload_sha256: string | null }>(
         `SELECT payload_sha256
@@ -415,9 +424,19 @@ app.post("/v1/events", async (request, reply) => {
         throw new Error("Conflicting event could not be read inside tenant scope");
       }
 
-      return existing.rows[0]?.payload_sha256 === payloadDigest
-        ? "duplicate" as const
-        : "event_id_conflict" as const;
+      if (existing.rows[0]?.payload_sha256 !== payloadDigest) {
+        return "event_id_conflict" as const;
+      }
+      // Ensure a prior event whose detection job was completed/dead-lettered
+      // can be safely re-enqueued by an explicit connector retry.
+      await client.query(
+        `INSERT INTO onishield.detection_replay_jobs
+          (tenant_id, connector_id, event_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING`,
+        [config.tenantId, config.connectorId, event.event_id]
+      );
+      return "duplicate" as const;
     });
 
     if (outcome === "event_id_conflict") {
