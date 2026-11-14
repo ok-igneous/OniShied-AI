@@ -36,15 +36,10 @@ export type PersistedThreatIndicatorMatch = IndicatorMatch & {
   match_id: string;
 };
 
-async function matchEventIndicators(
+async function loadActiveIndicators(
   client: PoolClient,
-  tenantId: string,
-  event: SecurityEventInput
-): Promise<PersistedThreatIndicatorMatch[]> {
-  if (event.tenant_id !== tenantId) {
-    throw new Error("Event tenant does not match threat-intelligence scope");
-  }
-
+  tenantId: string
+): Promise<ThreatIndicator[]> {
   const indicatorResult = await client.query<StoredIndicatorRow>(
     "SELECT id::text, version, indicator_type, value_normalized, " +
     "status, valid_from::text, expires_at::text, confidence, tlp, source_id::text " +
@@ -59,7 +54,7 @@ async function matchEventIndicators(
     throw new Error("Tenant threat indicator candidate limit exceeded");
   }
 
-  const indicators: ThreatIndicator[] = indicatorResult.rows.map((row) => ({
+  return indicatorResult.rows.map((row) => ({
     id: row.id,
     version: row.version,
     type: row.indicator_type,
@@ -71,6 +66,17 @@ async function matchEventIndicators(
     tlp: row.tlp,
     source_id: row.source_id
   }));
+}
+
+async function persistEventMatches(
+  client: PoolClient,
+  tenantId: string,
+  event: SecurityEventInput,
+  indicators: readonly ThreatIndicator[]
+): Promise<PersistedThreatIndicatorMatch[]> {
+  if (event.tenant_id !== tenantId) {
+    throw new Error("Event tenant does not match threat-intelligence scope");
+  }
 
   const matches = matchThreatIndicators({
     connectorId: event.source.connector_id,
@@ -130,12 +136,30 @@ async function matchEventIndicators(
  * Matches an already validated event inside the caller's tenant transaction.
  * No network requests or response actions are performed.
  */
-export function matchEventIndicatorsInTransaction(
+export async function matchEventsIndicatorsInTransaction(
+  client: PoolClient,
+  tenantId: string,
+  events: readonly SecurityEventInput[]
+): Promise<PersistedThreatIndicatorMatch[]> {
+  if (events.some((event) => event.tenant_id !== tenantId)) {
+    throw new Error("Event tenant does not match threat-intelligence scope");
+  }
+  if (events.length === 0) return [];
+
+  const indicators = await loadActiveIndicators(client, tenantId);
+  const results: PersistedThreatIndicatorMatch[] = [];
+  for (const event of events) {
+    results.push(...await persistEventMatches(client, tenantId, event, indicators));
+  }
+  return results;
+}
+
+export async function matchEventIndicatorsInTransaction(
   client: PoolClient,
   tenantId: string,
   event: SecurityEventInput
 ): Promise<PersistedThreatIndicatorMatch[]> {
-  return matchEventIndicators(client, tenantId, event);
+  return matchEventsIndicatorsInTransaction(client, tenantId, [event]);
 }
 
 /**
@@ -170,6 +194,6 @@ export async function matchStoredEventIndicators(input: {
       throw new Error("Stored security event identity or schema is invalid");
     }
 
-    return matchEventIndicators(client, input.tenantId, parsed.data);
+    return matchEventIndicatorsInTransaction(client, input.tenantId, parsed.data);
   });
 }
