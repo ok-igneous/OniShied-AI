@@ -22,6 +22,7 @@
 - Loopback-only operator login, session introspection, logout, rotation, session inventory/revocation, and threat-indicator review API routes. Rotation is atomic; session inventory is limited to the authenticated operator and tenant; privileged review/revocation operations serialize against session revocation. Review functions revalidate the session and write the authenticated operator UUID into the status audit record.
 - Database smoke coverage for credential-function access, session creation/resolution/revocation, tenant isolation, and denial of direct password/session-digest table access.
 - Resend transactional-email transport plus operator invitation, email-verification, and password-reset backend workflows. Action tokens are random, HMAC-digested before database storage, short-lived, one-use, and audited. Invitation acceptance creates a verified operator and tenant membership transactionally; password reset revokes active sessions. Login now requires verified email. Unit tests cover token handling and generic reset behavior; PostgreSQL smoke coverage is included in CI. Frontend fragment-token pages and live Resend configuration remain outstanding.
+- The accepted product and architecture direction for native intelligence, multi-model AI, adaptive learning, configurable Autopilot, AI usage allowances/credits, shared threat intelligence, and the operator dashboard is documented in [CONSOLIDATED_NEW_FEATURES_SPEC.md](CONSOLIDATED_NEW_FEATURES_SPEC.md). These are design decisions and acceptance criteria, not claims that the corresponding services or user-facing capabilities are implemented.
 
 ## Important implementation boundaries
 
@@ -36,7 +37,7 @@
 
 ## Verification status
 
-**Not verified yet.** GitHub Actions has repeatedly failed before allocating a runner; the latest observed run had runner ID 0 and zero executed steps. The exact current cause has not been established from a fresh annotation. Therefore, no passing claim is made for migrations, PostgreSQL RLS tests, unit tests, type-checking, or build.
+**Not verified yet.** The latest workflow run associated with the current backup branch completed with failure and reported zero executed steps. The job-step endpoint returned an empty list and the workflow-log endpoint was unavailable, so the precise failure cause is unconfirmed. Do not attribute it to billing or runner allocation without fresh GitHub annotations. No passing claim is made for migrations, PostgreSQL RLS tests, unit tests, type-checking, build, or backup/restore integration.
 
 A successful CI run must be observed before treating the database controls or application code as validated. The owner must resolve the GitHub account billing restriction under GitHub **Settings → Billing & plans**; making the repository public does not bypass this account-level restriction.
 
@@ -47,7 +48,7 @@ A successful CI run must be observed before treating the database controls or ap
 3. Deploy and verify the web-client token pages, Resend sender/domain, invitation/email verification/password-reset flows, device labeling, remote browser/mobile token transport, TLS/origin policy, secure client storage, key rotation/backup, and throttle retention before exposing operator routes beyond loopback.
 4. Provision production reviewer accounts and independently review authenticated review/audit controls.
 5. Integrate TLP enforcement into authenticated read/report/export paths with persisted recipient scope and verify append-only audit retention/backup controls.
-6. Obtain a passing PostgreSQL 16 backup/restore integration run, then complete a separate application/tenant/identity/audit recovery drill. Provision a real versioned Object-Lock bucket and verify upload, retrieval, retention enforcement and restore from the remote copy. Exercise the new and historical backup key IDs during rotation and prove recovery before retiring any old key. Then add scheduling, WAL/PITR where supported, and measured RPO/RTO before production data is accepted.
+6. Obtain a passing PostgreSQL 16 backup/restore integration run. Provision a dedicated versioned Object-Lock bucket and run the opt-in S3 upload/download/isolated-restore drill with real provider credentials, including historical and active key IDs. Then complete a separate application/tenant/identity/audit recovery drill. Add scheduling operations, WAL/PITR where supported, and measured RPO/RTO before production data is accepted.
 7. Implement Autopilot policy simulation first; keep execution disabled until deterministic detection, read-only investigation, approval, rollback, emergency pause, and audit controls have independent tests.
 8. Only after those gates, implement a reversible lab action and then explicitly opt-in low-risk automation. Tier 2 always requires approval; Tier 3 remains excluded.
 
