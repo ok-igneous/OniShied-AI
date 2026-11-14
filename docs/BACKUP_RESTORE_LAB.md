@@ -56,6 +56,8 @@ Verification authenticates the manifest, checks the encrypted-file SHA-256 diges
 4. Run restore only after reviewing the selected backup and its incident/forensic context.
 
 ```sh
+export BACKUP_ARTIFACT='/secure/backups/onishield/backup-id.pgdump.enc'
+export BACKUP_MANIFEST='/secure/backups/onishield/backup-id.manifest.json'
 export RESTORE_TARGET_DATABASE_URL='postgresql://restore_user:REDACTED@127.0.0.1:5432/onishield_restore'
 export RESTORE_CONFIRMATION='RESTORE_TO_ISOLATED_DATABASE'
 node scripts/backup-postgres.mjs restore
