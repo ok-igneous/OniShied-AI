@@ -28,6 +28,7 @@ const input = investigationAnalysisInputSchema.parse({
     matched_conditions: ["threshold_met"],
     known_limitations: [],
     threat_match_total_count: 0,
+    threat_matches_withheld_count: 0,
     threat_matches_truncated: false,
     evidence_total_count: 1,
     evidence_truncated: false,
