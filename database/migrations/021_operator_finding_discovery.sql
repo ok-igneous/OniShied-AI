@@ -1,6 +1,9 @@
 -- Authenticated, tenant-scoped finding discovery for the operator console.
 BEGIN;
 
+CREATE INDEX detection_findings_tenant_title_prefix_idx
+  ON onishield.detection_findings (tenant_id, lower(title) text_pattern_ops);
+
 CREATE FUNCTION onishield.list_operator_detection_findings(
   p_token_hash TEXT,
   p_limit INTEGER DEFAULT 50,
@@ -58,8 +61,7 @@ BEGIN
        AND (p_status IS NULL OR finding.status = p_status)
        AND (p_severity IS NULL OR finding.severity = p_severity)
        AND (NULLIF(btrim(p_query), '') IS NULL
-         OR finding.title ILIKE '%' || btrim(p_query) || '%'
-         OR finding.explanation ILIKE '%' || btrim(p_query) || '%'
+         OR lower(finding.title) LIKE lower(btrim(p_query)) || '%'
          OR finding.finding_id = btrim(p_query))
      ORDER BY finding.last_seen_at DESC, finding.id DESC
      LIMIT p_limit;
