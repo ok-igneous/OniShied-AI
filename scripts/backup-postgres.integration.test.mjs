@@ -117,6 +117,8 @@ test("PostgreSQL backup created before key rotation remains verifiable and resto
     // Phase 1: create an artifact using the old active key.
     const oldKeyring = keyringEnvironment(oldKey, newKey, oldKeyId);
     const oldFiles = backupFiles(await cli("create", null, oldKeyring));
+    const oldManifest = JSON.parse(await readFile(path.join(backupDirectory, oldFiles.manifest), "utf8"));
+    assert.equal(oldManifest.key_id, oldKeyId);
     assert.match(await cli("verify", oldFiles, oldKeyring), /integrity and PostgreSQL archive validation passed/);
 
     // Phase 2: rotate the active key, retaining the old key for historical recovery.
