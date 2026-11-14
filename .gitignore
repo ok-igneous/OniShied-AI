@@ -36,3 +36,7 @@ playwright-report/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local encrypted backup artifacts (never commit recovery copies)
+/var/backups/
+*.pgdump.enc

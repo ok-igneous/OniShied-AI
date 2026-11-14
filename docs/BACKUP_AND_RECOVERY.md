@@ -1,6 +1,6 @@
 # Backup and Disaster Recovery — Technical Contract
 
-**Status:** Normative design contract; not implemented.  
+**Status:** Normative design contract; partial lab CLI authored on an unmerged branch and not verified.  
 **Initial deployment:** Disposable lab with synthetic data.  
 **Objective:** Recover OniShield service and customer security records after accidental deletion, corruption, infrastructure failure, ransomware, or compromised credentials.
 
@@ -20,7 +20,7 @@ The backup inventory must explicitly classify and assign retention to:
 - Connector/device inventory and enrollment metadata.
 - Required application configuration and deployment manifests.
 
-Secrets, live session tokens, plaintext passwords, MFA secrets, recovery codes, and raw API credentials must not be copied into ordinary database backups or exported into operator-accessible archives. Recovery of secret material must use a separately controlled key-management and credential-rotation procedure.
+Plaintext secrets, live bearer/session tokens, plaintext passwords, MFA encryption keys, recovery-code peppers, and raw API credentials must never be exported into operator-accessible archives. A full encrypted database recovery copy may contain password hashes, opaque session/action-token digests, and application-encrypted MFA-secret ciphertext where required to restore identity records. Treat these as high-sensitivity material: encrypt the complete archive, keep backup keys separate, and invalidate restored sessions and pending one-time tokens before any operator access is re-enabled. Key material itself must be recovered separately through a controlled key-management procedure.
 
 The team must document which records are reconstructable, which are authoritative, and which are intentionally excluded. Tenant data must remain tenant-isolated in backup access and restore operations.
 
@@ -70,7 +70,7 @@ Until measured, RPO/RTO are **TBD**. Do not advertise zero data loss or instant 
 6. Restore into an isolated clean environment with no production connectors or response credentials.
 7. Apply required migrations and run integrity, tenant-isolation, identity, and audit-consistency checks.
 8. Determine whether the recovery point contains attacker-controlled persistence, poisoned configuration, or compromised credentials.
-9. Rotate credentials and keys as required; re-enroll connectors and devices instead of blindly restoring trust.
+9. Invalidate all restored operator sessions, pending one-time authentication/action tokens, pending MFA enrollments and unused MFA recovery codes before application startup; require operators to re-enroll recovery codes, rotate credentials and keys as required, and re-enroll connectors and devices instead of blindly restoring trust.
 10. Obtain an authorized recovery approval and switch traffic in a controlled manner.
 11. Re-enable collection first; keep Autopilot and response execution disabled until explicitly reviewed.
 12. Verify service health, event continuity, audit continuity, and customer-visible status; document data loss and recovery actions.
@@ -114,4 +114,4 @@ A backup is not marked healthy solely because the provider reports upload succes
 
 ## 10. Initial implementation exclusions
 
-The initial lab does not provide a customer-facing backup dashboard, production backup scheduler, immutable cloud vault, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. Those remain implementation and operational release gates.
+The initial lab CLI provides encrypted single-database PostgreSQL dump creation, authenticated manifests, archive verification, and guarded restore into a new empty isolated database. A separate S3-compatible uploader is authored to verify the local backup before transfer, require bucket versioning and Object Lock, apply COMPLIANCE retention, and verify remote metadata. The archive necessarily contains high-sensitivity database authentication verifiers and encrypted MFA secret material; the lab restore CLI revokes restored sessions, consumes pending one-time tokens, clears pending MFA enrollment, and invalidates unused MFA recovery codes before service startup. Neither the PostgreSQL CLI nor the cloud uploader has been executed against a real database or provider. There is no scheduler, WAL/PITR, object/evidence backup, tenant-selective restore, cross-region recovery, automated ransomware-clean restore, or guaranteed RPO/RTO. See [BACKUP_RESTORE_LAB.md](BACKUP_RESTORE_LAB.md) for the current lab workflow.

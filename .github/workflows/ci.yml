@@ -103,6 +103,15 @@ jobs:
       - name: Run schema tests
         run: npm test
 
+      - name: Test backup encryption, connection mapping, PostgreSQL 16 restore, and uploader syntax
+        env:
+          BACKUP_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          npm run test:backup
+          node --test scripts/backup-postgres.integration.test.mjs
+          node --check scripts/backup-postgres.mjs
+          node --check scripts/backup-s3.mjs
+
       - name: Type-check
         run: npm run typecheck
 
