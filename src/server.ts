@@ -402,7 +402,16 @@ app.post("/v1/events", async (request, reply) => {
         ]
       );
 
-      if (inserted.rowCount === 1) return "accepted" as const;
+      if (inserted.rowCount === 1) {
+        await client.query(
+          `INSERT INTO onishield.detection_replay_jobs
+            (tenant_id, connector_id, event_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, connector_id, event_id) DO NOTHING`,
+          [config.tenantId, config.connectorId, event.event_id]
+        );
+        return "accepted" as const;
+      }
 
       const existing = await client.query<{ payload_sha256: string | null }>(
         `SELECT payload_sha256
@@ -415,9 +424,23 @@ app.post("/v1/events", async (request, reply) => {
         throw new Error("Conflicting event could not be read inside tenant scope");
       }
 
-      return existing.rows[0]?.payload_sha256 === payloadDigest
-        ? "duplicate" as const
-        : "event_id_conflict" as const;
+      if (existing.rows[0]?.payload_sha256 !== payloadDigest) {
+        return "event_id_conflict" as const;
+      }
+      // An explicit retry may release a dead-lettered job. Completed work is
+      // not reopened, and active leases are never stolen by connector retries.
+      await client.query(
+        `INSERT INTO onishield.detection_replay_jobs
+          (tenant_id, connector_id, event_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, connector_id, event_id) DO UPDATE
+           SET status = 'pending', attempts = 0, available_at = NOW(),
+               lease_until = NULL, lease_token = NULL,
+               last_error = NULL, updated_at = NOW()
+         WHERE onishield.detection_replay_jobs.status = 'dead_letter'`,
+        [config.tenantId, config.connectorId, event.event_id]
+      );
+      return "duplicate" as const;
     });
 
     if (outcome === "event_id_conflict") {
@@ -430,6 +453,19 @@ app.post("/v1/events", async (request, reply) => {
     let detectionStatus: "evaluated" | "pending" = "evaluated";
     try {
       await evaluateAndPersistAroundEvent(config.tenantId, event);
+      // The synchronous path already evaluated this event. Mark only a still-
+      // pending job complete; if a worker owns a lease, it remains responsible.
+      await withTenantTransaction(config.tenantId, async (client) => {
+        await client.query(
+          `UPDATE onishield.detection_replay_jobs
+              SET status = 'completed', completed_at = NOW(),
+                  lease_until = NULL, lease_token = NULL,
+                  last_error = NULL, updated_at = NOW()
+            WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3
+              AND status = 'pending'`,
+          [config.tenantId, config.connectorId, event.event_id]
+        );
+      });
     } catch (detectionError) {
       // Event durability is independent of detection availability. A connector
       // replay can safely re-trigger this idempotent evaluation.
