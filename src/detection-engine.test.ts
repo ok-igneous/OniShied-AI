@@ -11,13 +11,14 @@ function event(input: {
   host?: string;
   principal?: string;
   address?: string;
+  connector?: string;
 }): SecurityEventInput {
   return {
     schema_version: "0.1.0",
     event_id: input.id,
     tenant_id: input.tenant ?? "tenant-a",
     source: {
-      connector_id: "connector-a",
+      connector_id: input.connector ?? "connector-a",
       kind: "synthetic-lab",
       host_ref: input.host ?? "host-a"
     },
@@ -158,4 +159,22 @@ test("missing principal or host reference produces no finding", () => {
     event({ id: `host-${i}`, at: at(i * 5), host: i === 0 ? " " : "host-a" })
   );
   assert.equal(evaluateDetections(missingHost).length, 0);
+});
+
+test("same-time events from different connectors have stable evidence ordering", () => {
+  const events = Array.from({ length: 8 }, (_, i) => event({
+    id: `shared-${i}`,
+    at: at(0),
+    connector: i % 2 === 0 ? "connector-b" : "connector-a"
+  }));
+  const forward = evaluateDetections(events);
+  const reverse = evaluateDetections([...events].reverse());
+  assert.deepEqual(forward, reverse);
+  assert.equal(forward.length, 1);
+  assert.deepEqual(
+    forward[0]?.evidence_event_ids,
+    [...events]
+      .sort((a, b) => a.source.connector_id.localeCompare(b.source.connector_id) || a.event_id.localeCompare(b.event_id))
+      .map((item) => `${item.source.connector_id}:${item.event_id}`)
+  );
 });
