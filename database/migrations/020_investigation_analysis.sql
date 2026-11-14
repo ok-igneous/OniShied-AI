@@ -185,29 +185,38 @@ BEGIN
         ),'[]'::jsonb),
         'threat_matches',COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
-            'indicator_type',tm.indicator_type,'indicator_value',tm.value_normalized,
-            'indicator_confidence',tm.confidence,'tlp',tm.tlp,
-            'indicator_status',tm.status,'indicator_version',tm.version,
-            'source_name',tm.display_name,'source_kind',tm.source_kind,
-            'matcher_version',tm.matcher_version,'matched_field_path',tm.matched_field_path,
-            'matched_at',tm.matched_at,'valid_from',tm.valid_from,'expires_at',tm.expires_at
-          ) ORDER BY tm.matched_at DESC)
+            'indicator_type',match_data.indicator_type,
+            'indicator_value',match_data.value_normalized,
+            'indicator_confidence',match_data.confidence,
+            'tlp',match_data.tlp,
+            'indicator_status',match_data.status,
+            'indicator_version',match_data.version,
+            'source_name',match_data.display_name,
+            'source_kind',match_data.source_kind,
+            'matcher_version',match_data.matcher_version,
+            'matched_field_path',match_data.matched_field_path,
+            'matched_at',match_data.matched_at,
+            'valid_from',match_data.valid_from,
+            'expires_at',match_data.expires_at
+          ) ORDER BY match_data.matched_at DESC)
           FROM (
-            SELECT tm.indicator_type,tm.value_normalized,tm.confidence,tm.tlp,
-              tm.status,tm.version,tm.display_name,tm.source_kind,
-              tm.matcher_version,tm.matched_field_path,tm.matched_at,tm.valid_from,tm.expires_at
+            SELECT ti.indicator_type,ti.value_normalized,ti.confidence,ti.tlp,
+              ti.status,ti.version,src.display_name,src.source_kind,
+              tim.matcher_version,tim.matched_field_path,tim.matched_at,
+              ti.valid_from,ti.expires_at
             FROM onishield.detection_finding_threat_matches ftm
-            JOIN onishield.threat_indicator_matches tm
-              ON tm.tenant_id=ftm.tenant_id AND tm.id=ftm.threat_match_id
-             AND tm.connector_id=ftm.connector_id AND tm.event_id=ftm.event_id
+            JOIN onishield.threat_indicator_matches tim
+              ON tim.tenant_id=ftm.tenant_id AND tim.id=ftm.threat_match_id
+             AND tim.connector_id=ftm.connector_id AND tim.event_id=ftm.event_id
             JOIN onishield.threat_indicators ti
-              ON ti.tenant_id=tm.tenant_id AND ti.id=tm.indicator_id
-             AND tm.version=tm.indicator_version
+              ON ti.tenant_id=tim.tenant_id AND ti.id=tim.indicator_id
+             AND ti.version=tim.indicator_version
             JOIN onishield.threat_intelligence_sources src
               ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
             WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
-            ORDER BY tm.matched_at DESC LIMIT 100
-          ) tm
+            ORDER BY tim.matched_at DESC LIMIT 100
+          ) AS match_data
+        ),'[]'::jsonb)
       ) ORDER BY f.last_seen_at DESC)
       FROM onishield.investigation_case_findings a
       JOIN onishield.detection_findings f
