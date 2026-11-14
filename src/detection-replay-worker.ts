@@ -78,7 +78,7 @@ async function fail(job: ClaimedJob, error: unknown): Promise<void> {
           SET status = CASE WHEN attempts >= $4 THEN 'dead_letter' ELSE 'pending' END,
               available_at = CASE
                 WHEN attempts >= $4 THEN available_at
-                ELSE NOW() + ($5 * INTERVAL '1 millisecond')
+                ELSE NOW() + (LEAST(3600000, 1000 * power(2, LEAST(attempts - 1, 12))) * INTERVAL '1 millisecond')
               END,
               lease_until = NULL, lease_token = NULL,
               last_error = $6, updated_at = NOW()
@@ -89,7 +89,6 @@ async function fail(job: ClaimedJob, error: unknown): Promise<void> {
         job.id,
         job.lease_token,
         MAX_ATTEMPTS,
-        replayRetryDelayMs(1),
         message.slice(0, 500)
       ]
     );
