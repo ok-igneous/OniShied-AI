@@ -36,7 +36,7 @@ async function insertFindings(
           )
         ORDER BY f.created_at ASC, f.finding_id ASC
         LIMIT 1`,
-      [tenantId, persistedFinding.finding_id, finding.rule_id, finding.rule_version,
+      [tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
        finding.grouping_key_hash, JSON.stringify(finding.evidence_event_refs)]
     );
     const persistedFinding = {
@@ -88,7 +88,7 @@ async function insertFindings(
          updated_at = NOW()
        RETURNING (xmax = 0) AS inserted`,
       [
-        tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
+        tenantId, persistedFinding.finding_id, finding.rule_id, finding.rule_version,
         finding.status, finding.title, finding.explanation, finding.severity,
         finding.confidence, finding.first_seen_at, finding.last_seen_at,
         finding.episode_anchor.connector_id, finding.episode_anchor.event_id,
