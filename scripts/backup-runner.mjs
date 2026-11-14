@@ -96,6 +96,8 @@ async function main() {
     await saveStatus(status);
 
     if (process.env.S3_BUCKET) {
+      status.remote_upload = "pending";
+      await saveStatus(status);
       const s3Script = path.join(scriptDirectory, "backup-s3.mjs");
       await writeCommand(process.execPath, [s3Script, "upload"], verifyEnv);
       status.remote_upload = "uploaded_and_remote_metadata_verified";
@@ -110,6 +112,7 @@ async function main() {
   } catch (error) {
     status.state = "failed";
     status.completed_at = new Date().toISOString();
+    if (status.remote_upload === "pending") status.remote_upload = "failed";
     status.failure = error instanceof Error ? error.message : "Backup run failed";
     await saveStatus(status).catch(() => {});
     throw error;
