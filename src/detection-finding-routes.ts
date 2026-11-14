@@ -26,10 +26,9 @@ function connectorAuthorized(header: string | undefined): boolean {
 export function registerDetectionFindingRoutes(
   app: FastifyInstance,
   operatorAuth: OperatorAuthService | null,
-  authDatabase: Pick<Pool, "query"> | null,
-  applicationDatabase: Pick<Pool, "query"> | null
+  authDatabase: Pick<Pool, "query"> | null
 ): void {
-  registerEndpointEnrollmentRoutes(app, operatorAuth, authDatabase, applicationDatabase);
+  registerEndpointEnrollmentRoutes(app, operatorAuth, authDatabase, authDatabase);
   registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get("/v1/operator/findings", async (request, reply) => {
