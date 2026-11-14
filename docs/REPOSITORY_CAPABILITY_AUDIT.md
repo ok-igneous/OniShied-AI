@@ -110,8 +110,8 @@ The repository has a CI workflow that intends to run:
 
 The latest run observed during this update:
 
-- Workflow run: [#360](https://github.com/ok-igneous/OniShied-AI/actions/runs/43569647332)
-- Commit: `f4a0897b4d13307a6ec8192ef3a910bf24021c00`
+- Workflow run: [#398](https://github.com/ok-igneous/OniShied-AI/actions/runs/43576699091)
+- Commit: `b61ef4ed354c546ca0586751a8d58313bc55954a`
 - Conclusion: **failure**
 - Job runner ID: `0`
 - Job steps: none
