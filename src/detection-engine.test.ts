@@ -202,3 +202,53 @@ test("finding identity cannot collide on colon-containing connector and event ID
   assert.notDeepEqual(leftFinding.evidence_event_refs, rightFinding.evidence_event_refs);
   assert.notEqual(leftFinding.finding_id, rightFinding.finding_id);
 });
+
+
+test("adding later evidence inside the burst episode does not change incident identity", () => {
+  const initial = Array.from({ length: 8 }, (_, i) => event({ id: `stable-${i}`, at: at(i * 10) }));
+  const first = evaluateDetections(initial)[0]!;
+  const later = event({ id: "stable-late", at: at(240) });
+  const enriched = evaluateDetections([...initial, later])[0]!;
+  assert.equal(enriched.finding_id, first.finding_id);
+  assert.deepEqual(enriched.episode_anchor, first.episode_anchor);
+  assert.equal(enriched.evidence_event_refs.length, 9);
+});
+
+test("a burst after the five-minute post-trigger boundary is a separate episode", () => {
+  const firstEpisode = Array.from({ length: 8 }, (_, i) => event({ id: `first-${i}`, at: at(i * 5) }));
+  const secondEpisode = Array.from({ length: 8 }, (_, i) => event({ id: `second-${i}`, at: at(360 + i * 5) }));
+  const findings = evaluateDetections([...firstEpisode, ...secondEpisode])
+    .filter((finding) => finding.rule_id === "AUTH_FAILURE_BURST");
+  assert.equal(findings.length, 2);
+  assert.notEqual(findings[0]?.finding_id, findings[1]?.finding_id);
+});
+
+test("out-of-order evidence after the burst anchor enriches the same episode", () => {
+  const initial = Array.from({ length: 8 }, (_, i) => event({ id: `late-base-${i}`, at: at(i * 10) }));
+  const late = event({ id: "late-arrival", at: at(90) });
+  const first = evaluateDetections(initial)[0]!;
+  const replayed = evaluateDetections([...initial.slice(0, 7), late, initial[7]!])[0]!;
+  assert.equal(replayed.finding_id, first.finding_id);
+  assert.ok(replayed.evidence_event_refs.some((ref) => ref.event_id === "late-arrival"));
+});
+
+test("each qualifying success creates a distinct sequence episode", () => {
+  const failures = Array.from({ length: 5 }, (_, i) => event({ id: `seq-f-${i}`, at: at(i * 10) }));
+  const successes = [100, 110].map((second, i) => event({
+    id: `seq-s-${i}`, type: "identity.authentication.success", at: at(second)
+  }));
+  const findings = evaluateDetections([...failures, ...successes])
+    .filter((finding) => finding.rule_id === "AUTH_FAILURE_THEN_SUCCESS");
+  assert.equal(findings.length, 2);
+  assert.notEqual(findings[0]?.finding_id, findings[1]?.finding_id);
+});
+
+
+test("a late event before the burst anchor can move the threshold anchor", () => {
+  const initial = Array.from({ length: 8 }, (_, i) => event({ id: `pre-anchor-${i}`, at: at(i * 10) }));
+  const original = evaluateDetections(initial)[0]!;
+  const lateEarlier = event({ id: "pre-anchor-late", at: at(-10) });
+  const recomputed = evaluateDetections([...initial, lateEarlier])[0]!;
+  assert.notEqual(recomputed.finding_id, original.finding_id);
+  assert.equal(recomputed.episode_anchor.event_id, "pre-anchor-6");
+});

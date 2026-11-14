@@ -9,26 +9,111 @@ async function insertFindings(
   client: PoolClient,
   tenantId: string,
   findings: readonly DetectionFinding[]
-): Promise<number> {
+): Promise<{ insertedCount: number; findings: DetectionFinding[] }> {
   let insertedCount = 0;
+  const persistedFindings: DetectionFinding[] = [];
   for (const finding of findings) {
     if (finding.tenant_id !== tenantId) {
       throw new Error("Finding tenant does not match transaction tenant");
     }
-    const result = await client.query(
-      `INSERT INTO onishield.detection_findings
+    // Migration 016 preserves legacy finding IDs and backfills their first
+    // evidence reference as the legacy anchor. Reuse that row when its anchor
+    // is present in this episode's evidence, rather than creating a duplicate
+    // stable-identity row during the first post-upgrade evaluation.
+    const legacy = await client.query<{ finding_id: string }>(
+      `SELECT f.finding_id
+         FROM onishield.detection_findings AS f
+        WHERE f.tenant_id = $1
+          AND f.finding_id <> $2
+          AND f.rule_id = $3
+          AND f.rule_version = $4
+          AND f.grouping_key_hash = $5
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_to_recordset($6::jsonb) AS incoming(connector_id TEXT, event_id TEXT)
+             WHERE incoming.connector_id = f.episode_anchor_connector_id
+               AND incoming.event_id = f.episode_anchor_event_id
+          )
+          AND EXISTS (
+            SELECT 1
+              FROM onishield.security_events AS legacy_anchor
+              JOIN onishield.security_events AS trigger_event
+                ON trigger_event.tenant_id = legacy_anchor.tenant_id
+               AND trigger_event.connector_id = $7
+               AND trigger_event.event_id = $8
+             WHERE legacy_anchor.tenant_id = f.tenant_id
+               AND legacy_anchor.connector_id = f.episode_anchor_connector_id
+               AND legacy_anchor.event_id = f.episode_anchor_event_id
+               AND legacy_anchor.observed_at <= trigger_event.observed_at
+               AND legacy_anchor.observed_at >= trigger_event.observed_at -
+                 CASE WHEN f.rule_id = 'AUTH_FAILURE_BURST'
+                   THEN INTERVAL '5 minutes' ELSE INTERVAL '10 minutes' END
+          )
+        ORDER BY f.created_at ASC, f.finding_id ASC
+        LIMIT 1`,
+      [tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
+       finding.grouping_key_hash, JSON.stringify(finding.evidence_event_refs)]
+    );
+    const persistedFinding = {
+      ...finding,
+      finding_id: legacy.rows[0]?.finding_id ?? finding.finding_id
+    };
+    persistedFindings.push(persistedFinding);
+    const result = await client.query<{ inserted: boolean }>(
+      `INSERT INTO onishield.detection_findings AS current_finding
         (tenant_id, finding_id, rule_id, rule_version, status, title,
          explanation, severity, confidence, first_seen_at, last_seen_at,
+         episode_anchor_connector_id, episode_anchor_event_id,
          evidence_event_ids, evidence_event_refs, grouping_key_hash,
          matched_conditions, known_limitations)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               $12::jsonb, $13::jsonb, $14, $15::jsonb, $16::jsonb)
-       ON CONFLICT (tenant_id, finding_id) DO NOTHING
-       RETURNING id`,
+               $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb)
+       ON CONFLICT (tenant_id, finding_id) DO UPDATE SET
+         episode_anchor_connector_id = EXCLUDED.episode_anchor_connector_id,
+         episode_anchor_event_id = EXCLUDED.episode_anchor_event_id,
+         first_seen_at = LEAST(current_finding.first_seen_at, EXCLUDED.first_seen_at),
+         last_seen_at = GREATEST(current_finding.last_seen_at, EXCLUDED.last_seen_at),
+         evidence_event_refs = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item->>'connector_id', item->>'event_id'), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements(
+               current_finding.evidence_event_refs || EXCLUDED.evidence_event_refs
+             ) AS refs(item)
+           ) AS merged
+         ),
+         evidence_event_ids = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               current_finding.evidence_event_ids || EXCLUDED.evidence_event_ids
+             ) AS ids(item)
+           ) AS merged
+         ),
+         matched_conditions = (
+           SELECT COALESCE(jsonb_agg(item ORDER BY item), '[]'::jsonb)
+           FROM (
+             SELECT DISTINCT item
+             FROM jsonb_array_elements_text(
+               current_finding.matched_conditions || EXCLUDED.matched_conditions
+             ) AS conditions(item)
+           ) AS merged
+         ),
+         explanation = CASE
+           WHEN jsonb_array_length(EXCLUDED.evidence_event_refs) >=
+                jsonb_array_length(current_finding.evidence_event_refs)
+             THEN EXCLUDED.explanation
+           ELSE current_finding.explanation
+         END,
+         title = EXCLUDED.title,
+         updated_at = NOW()
+       RETURNING (xmax = 0) AS inserted`,
       [
-        tenantId, finding.finding_id, finding.rule_id, finding.rule_version,
+        tenantId, persistedFinding.finding_id, finding.rule_id, finding.rule_version,
         finding.status, finding.title, finding.explanation, finding.severity,
         finding.confidence, finding.first_seen_at, finding.last_seen_at,
+        finding.episode_anchor.connector_id, finding.episode_anchor.event_id,
         JSON.stringify(finding.evidence_event_ids),
         JSON.stringify(finding.evidence_event_refs),
         finding.grouping_key_hash,
@@ -36,9 +121,19 @@ async function insertFindings(
         JSON.stringify(finding.known_limitations)
       ]
     );
-    insertedCount += result.rowCount ?? 0;
+    insertedCount += result.rows.filter((row) => row.inserted).length;
+
+    for (const evidence of finding.evidence_event_refs) {
+      await client.query(
+        `INSERT INTO onishield.detection_finding_evidence
+          (tenant_id, finding_id, connector_id, event_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id, finding_id, connector_id, event_id) DO NOTHING`,
+        [tenantId, persistedFinding.finding_id, evidence.connector_id, evidence.event_id]
+      );
+    }
   }
-  return insertedCount;
+  return { insertedCount, findings: persistedFindings };
 }
 
 async function persistFindingThreatMatches(
@@ -100,8 +195,8 @@ export async function persistDetectionFindings(
   tenantId: string,
   findings: readonly DetectionFinding[]
 ): Promise<number> {
-  return withTenantTransaction(tenantId, (client) =>
-    insertFindings(client, tenantId, findings)
+  return withTenantTransaction(tenantId, async (client) =>
+    (await insertFindings(client, tenantId, findings)).insertedCount
   );
 }
 
@@ -117,6 +212,26 @@ export async function evaluateAndPersistAroundEvent(
     throw new Error("Event tenant does not match detection scope");
   }
   return withTenantTransaction(tenantId, async (client) => {
+    // Serialize evaluation for the exact detector grouping keys. Ingestion is
+    // already committed before this transaction starts, so a waiter sees the
+    // preceding evaluator's committed event and finding writes.
+    const principal = typeof event.data.principal_ref === "string"
+      ? event.data.principal_ref.trim() : "";
+    const host = typeof event.source.host_ref === "string"
+      ? event.source.host_ref.trim() : "";
+    const lockKeys: string[] = [];
+    if (principal && host) {
+      lockKeys.push(JSON.stringify(["sequence", tenantId, host, principal]));
+      if (event.event_type === "identity.authentication.failure") {
+        const address = typeof event.data.source_address === "string"
+          ? event.data.source_address.trim() : "";
+        if (address) lockKeys.push(JSON.stringify(["burst", tenantId, host, principal, address]));
+      }
+    }
+    for (const key of lockKeys.sort()) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
+    }
+
     const rows = await client.query<{ event_json: unknown }>(
       `SELECT event_json
          FROM onishield.security_events
@@ -137,9 +252,9 @@ export async function evaluateAndPersistAroundEvent(
     }
 
     const findings = evaluateDetections(events);
-    const insertedCount = await insertFindings(client, tenantId, findings);
-    await persistFindingThreatMatches(client, tenantId, findings, events);
-    return insertedCount;
+    const persisted = await insertFindings(client, tenantId, findings);
+    await persistFindingThreatMatches(client, tenantId, persisted.findings, events);
+    return persisted.insertedCount;
   });
 }
 
@@ -155,7 +270,8 @@ export async function listDetectionFindings(
     const result = await client.query(
       `SELECT f.finding_id, f.rule_id, f.rule_version, f.status, f.title,
               f.explanation, f.severity, f.confidence, f.first_seen_at,
-              f.last_seen_at, f.evidence_event_ids, f.evidence_event_refs,
+              f.last_seen_at, f.episode_anchor_connector_id, f.episode_anchor_event_id,
+              f.evidence_event_ids, f.evidence_event_refs,
               f.grouping_key_hash, f.matched_conditions, f.known_limitations,
               f.created_at, f.updated_at,
               COALESCE((
