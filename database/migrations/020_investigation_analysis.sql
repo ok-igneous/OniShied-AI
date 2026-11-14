@@ -23,6 +23,7 @@ CREATE TABLE onishield.investigation_analysis_jobs (
   CONSTRAINT investigation_analysis_jobs_actor_fk
     FOREIGN KEY (tenant_id,requested_by_membership_id,requested_by_operator_id)
     REFERENCES onishield.operator_memberships(tenant_id,id,operator_id),
+  CONSTRAINT investigation_analysis_jobs_tenant_id_unique UNIQUE (tenant_id,id),
   CONSTRAINT investigation_analysis_jobs_request_unique UNIQUE (tenant_id,request_id)
 );
 
