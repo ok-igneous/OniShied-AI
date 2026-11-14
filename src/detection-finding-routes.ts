@@ -6,6 +6,7 @@ import type { OperatorAuthService } from "./operator-auth-service.js";
 import { listDetectionFindings } from "./detection-finding-store.js";
 import type { Pool } from "pg";
 import { registerInvestigationRoutes } from "./investigation-routes.js";
+import { registerOperatorInvestigationConsole } from "./operator-console.js";
 
 function operatorBearer(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
@@ -25,6 +26,7 @@ export function registerDetectionFindingRoutes(
   operatorAuth: OperatorAuthService | null,
   authDatabase: Pick<Pool, "query"> | null
 ): void {
+  registerOperatorInvestigationConsole(app);
   registerInvestigationRoutes(app, operatorAuth, authDatabase);
   app.get<{ Params: { findingId: string } }>(
     "/v1/operator/findings/:findingId/history",

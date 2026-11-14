@@ -20,6 +20,10 @@ Its intended workflow is:
 
 AI investigation is advisory. Deterministic server-side policy—not model output—must authorize every response action.
 
+## Operator investigation console
+
+The early operator investigation workspace is available at `/operator` when the API server is running. It requires an existing operator session token and supports case review, creating cases from supplied finding IDs, associating additional findings, analyst notes, finding-status transitions, AI analysis requests, job status, and immutable report history. Mutations require the server-enforced role and recent step-up checks. It is not a production SOC dashboard and has not yet been browser-tested.
+
 ## Product features
 
 The full capability register, including Autopilot, Backup and Recovery, endpoint protection, threat intelligence, AI investigation, identity, reporting and planned integrations, is maintained in [Feature Catalogue](docs/FEATURE_CATALOG.md).
