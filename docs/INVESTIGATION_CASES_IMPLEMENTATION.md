@@ -10,6 +10,7 @@
 - Direct runtime table privileges revoked. Mutations are exposed through database functions that validate the opaque operator session, active account/membership, role, tenant, and five-minute step-up.
 - Operator APIs:
   - GET /v1/operator/investigations
+  - GET /v1/operator/findings (tenant-scoped search for case creation)
   - POST /v1/operator/investigations
   - GET /v1/operator/investigations/:caseId
   - POST /v1/operator/investigations/:caseId/findings
@@ -39,7 +40,7 @@
 
 - A responsive operator workspace is served at `/operator`.
 - Operators paste an existing operator session token; the console does not collect passwords or issue sessions. The token is held in browser session storage for the tab and can be cleared with Disconnect.
-- The console lists cases, creates cases from 1–25 explicitly supplied finding IDs and a human reason, opens case evidence and activity, associates additional findings, and adds analyst notes.
+- The console lists cases and searches tenant-scoped findings through an operator-authenticated endpoint. Operators can add discovered finding IDs to a case draft, create cases from 1–25 findings and a human reason, open case evidence and activity, associate additional findings, and add analyst notes.
 - Authorized analysts can request finding-status transitions with a reason. The database enforces role permissions and recent step-up authentication; the UI reports a step-up-required response rather than bypassing that control.
 - The console requests AI analysis, checks queue status, and loads immutable report history.
 - API calls use same-origin authenticated endpoints and no-store caching. The page sets a restrictive Content Security Policy and does not load third-party scripts, fonts, images, or analytics.
@@ -52,7 +53,7 @@
 - One finding can belong to only one case in this release, including resolved cases; audited case merge/re-parenting is deferred.
 - Case priority is a snapshot at creation; it is not dynamically recomputed when finding severity changes.
 - Evidence is referenced from canonical finding evidence; event payloads are not copied into investigation records.
-- The SQL smoke tests are authored but not executed. Migrations 019 and 020 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run. The operator console has been authored but not browser-tested.
+- The SQL smoke tests are authored but not executed. Migrations 019, 020, and 021 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run. The operator console has been authored but not browser-tested.
 - Concurrent duplicate protection relies on database uniqueness and transaction semantics; a concurrent database stress test remains outstanding.
 
 ## Verification gate
