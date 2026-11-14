@@ -82,6 +82,18 @@ REVOKE ALL ON onishield.investigation_analysis_jobs, onishield.investigation_ana
   FROM PUBLIC,onishield_app,onishield_auth;
 GRANT USAGE,SELECT ON SEQUENCE onishield.investigation_activity_id_seq TO onishield_owner;
 
+
+CREATE FUNCTION onishield.reject_investigation_report_mutation()
+RETURNS trigger LANGUAGE plpgsql
+SET search_path=pg_catalog,onishield AS $
+BEGIN
+  RAISE EXCEPTION 'Investigation analysis reports are immutable';
+END $;
+
+CREATE TRIGGER investigation_analysis_reports_immutable
+BEFORE UPDATE OR DELETE ON onishield.investigation_analysis_reports
+FOR EACH ROW EXECUTE FUNCTION onishield.reject_investigation_report_mutation();
+
 CREATE FUNCTION onishield.request_investigation_analysis(
   p_token_hash TEXT,p_case_id UUID,p_request_id TEXT
 ) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
@@ -153,6 +165,26 @@ BEGIN
           JOIN onishield.security_events ev
             ON ev.tenant_id=e.tenant_id AND ev.connector_id=e.connector_id AND ev.event_id=e.event_id
           WHERE e.tenant_id=f.tenant_id AND e.finding_id=f.finding_id
+        ),'[]'::jsonb),
+        'threat_matches',COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'indicator_type',ti.indicator_type,'indicator_value',ti.value_normalized,
+            'indicator_confidence',ti.confidence,'tlp',ti.tlp,
+            'indicator_status',ti.status,'indicator_version',ti.version,
+            'source_name',src.display_name,'source_kind',src.source_kind,
+            'matcher_version',tm.matcher_version,'matched_field_path',tm.matched_field_path,
+            'matched_at',tm.matched_at,'valid_from',ti.valid_from,'expires_at',ti.expires_at
+          ) ORDER BY tm.matched_at DESC)
+          FROM onishield.detection_finding_threat_matches ftm
+          JOIN onishield.threat_indicator_matches tm
+            ON tm.tenant_id=ftm.tenant_id AND tm.id=ftm.threat_match_id
+           AND tm.connector_id=ftm.connector_id AND tm.event_id=ftm.event_id
+          JOIN onishield.threat_indicators ti
+            ON ti.tenant_id=tm.tenant_id AND ti.id=tm.indicator_id
+           AND ti.version=tm.indicator_version
+          JOIN onishield.threat_intelligence_sources src
+            ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
+          WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
         ),'[]'::jsonb)
       ) ORDER BY f.last_seen_at DESC)
       FROM onishield.investigation_case_findings a
