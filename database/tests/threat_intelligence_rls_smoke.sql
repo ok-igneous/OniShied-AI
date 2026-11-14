@@ -97,6 +97,19 @@ BEGIN
   END IF;
 
   BEGIN
+    INSERT INTO onishield.threat_indicator_matches
+      (tenant_id, connector_id, event_id, indicator_id, indicator_version,
+       matched_field_path, matcher_version)
+    SELECT tenant_id, 'connector-not-present', 'synthetic-event-1',
+           id, version, 'data.source_ip', 'exact-v1'
+      FROM onishield.threat_indicators
+     WHERE indicator_key = 'synthetic-indicator-1';
+    RAISE EXCEPTION 'Match unexpectedly accepted a connector that does not own the event';
+  EXCEPTION
+    WHEN foreign_key_violation THEN NULL;
+  END;
+
+  BEGIN
     INSERT INTO onishield.threat_indicators
       (tenant_id, indicator_key, version, indicator_type, value_normalized,
        source_id, source_record_ref, confidence, confidence_rubric_version,
