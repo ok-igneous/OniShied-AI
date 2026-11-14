@@ -4,22 +4,18 @@ import { config } from "./config.js";
 import { pool, withTenantTransaction } from "./database.js";
 import { evaluateAndPersistAroundEvent } from "./detection-finding-store.js";
 import { securityEventSchema } from "./security-event.js";
+import { replayRetryDelayMs } from "./detection-replay-policy.js";
 
 const POLL_INTERVAL_MS = 2_000;
 const LEASE_MS = 120_000;
 const MAX_ATTEMPTS = 10;
 
-export function replayRetryDelayMs(attempt: number): number {
-  if (!Number.isInteger(attempt) || attempt < 1) {
-    throw new Error("Replay attempt must be a positive integer");
-  }
-  return Math.min(60 * 60_000, 1_000 * 2 ** Math.min(attempt - 1, 12));
-}
 
 type ClaimedJob = {
   id: string;
   lease_token: string;
   event_json: unknown;
+  attempts: number;
 };
 
 async function claimOne(): Promise<ClaimedJob | null> {
@@ -49,7 +45,7 @@ async function claimOne(): Promise<ClaimedJob | null> {
           AND e.tenant_id = j.tenant_id
           AND e.connector_id = j.connector_id
           AND e.event_id = j.event_id
-       RETURNING j.id::text, j.lease_token::text, e.event_json`,
+       RETURNING j.id::text, j.lease_token::text, e.event_json, j.attempts`,
       [config.tenantId, LEASE_MS, token]
     );
     return result.rows[0] ?? null;
@@ -78,7 +74,7 @@ async function fail(job: ClaimedJob, error: unknown): Promise<void> {
           SET status = CASE WHEN attempts >= $4 THEN 'dead_letter' ELSE 'pending' END,
               available_at = CASE
                 WHEN attempts >= $4 THEN available_at
-                ELSE NOW() + (LEAST(3600000, 1000 * power(2, LEAST(attempts - 1, 12))) * INTERVAL '1 millisecond')
+                ELSE NOW() + ($5 * INTERVAL '1 millisecond')
               END,
               lease_until = NULL, lease_token = NULL,
               last_error = $6, updated_at = NOW()
@@ -89,6 +85,7 @@ async function fail(job: ClaimedJob, error: unknown): Promise<void> {
         job.id,
         job.lease_token,
         MAX_ATTEMPTS,
+        replayRetryDelayMs(job.attempts),
         message.slice(0, 500)
       ]
     );
