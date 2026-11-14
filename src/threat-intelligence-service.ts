@@ -89,6 +89,7 @@ export async function matchStoredEventIndicators(input: {
     }));
 
     const matches = matchThreatIndicators({
+      connectorId: input.connectorId,
       eventId: input.eventId,
       data: eventDocument.data,
       indicators
@@ -102,6 +103,7 @@ export async function matchStoredEventIndicators(input: {
     for (const match of matches) {
       const values = [
         input.tenantId,
+        match.connector_id,
         match.event_id,
         match.indicator_id,
         match.indicator_version,
@@ -111,10 +113,10 @@ export async function matchStoredEventIndicators(input: {
 
       const inserted = await client.query<StoredMatchRow>(
         "INSERT INTO onishield.threat_indicator_matches " +
-        "(tenant_id, event_id, indicator_id, indicator_version, " +
+        "(tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
         "matched_field_path, matcher_version, matched_at) " +
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) " +
-        "ON CONFLICT (tenant_id, event_id, indicator_id, indicator_version, " +
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) " +
+        "ON CONFLICT (tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
         "matched_field_path, matcher_version) DO NOTHING " +
         "RETURNING id::text, matched_at::text",
         [...values, match.matched_at]
@@ -123,9 +125,9 @@ export async function matchStoredEventIndicators(input: {
       const stored = inserted.rows[0] ?? (await client.query<StoredMatchRow>(
         "SELECT id::text, matched_at::text " +
         "FROM onishield.threat_indicator_matches " +
-        "WHERE tenant_id = $1 AND event_id = $2 AND indicator_id = $3 " +
-        "AND indicator_version = $4 AND matched_field_path = $5 " +
-        "AND matcher_version = $6",
+        "WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3 " +
+        "AND indicator_id = $4 AND indicator_version = $5 " +
+        "AND matched_field_path = $6 AND matcher_version = $7",
         values
       )).rows[0];
 
