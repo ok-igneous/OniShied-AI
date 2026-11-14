@@ -13,7 +13,7 @@ Initial scope is synthetic indicators and manually curated records. Automatic pu
 
 - `threat_intelligence_sources`: tenant-owned source identity, source kind, and mandatory license reference.
 - `threat_indicators`: tenant-owned immutable-version records with normalized value, source provenance, validity, confidence rubric, assessor, status, TLP, and optional content digest.
-- `threat_indicator_matches`: tenant-owned event references and evidence paths, pinned to an exact indicator version and matcher version.
+- `threat_indicator_matches`: tenant-owned event references and evidence paths, pinned to an exact indicator version and matcher version. Migration 014 adds `connector_id`, a composite foreign key to the canonical `(tenant_id, connector_id, event_id)` event identity, and connector-scoped replay uniqueness.
 - Composite tenant foreign keys prevent an indicator from referencing another tenant's source or a match from referencing another tenant's indicator.
 - All three tables use ENABLE and FORCE ROW LEVEL SECURITY with transaction-local `app.tenant_id` policies.
 - Runtime grants are SELECT-only on sources and SELECT/INSERT on indicators and matches. The migration runner explicitly revokes the generic runtime INSERT grant on sources.
@@ -21,13 +21,13 @@ Initial scope is synthetic indicators and manually curated records. Automatic pu
 - Reviewer-only status transitions and append-only audit controls are specified in [THREAT_INTELLIGENCE_REVIEW.md](./THREAT_INTELLIGENCE_REVIEW.md).
 - Global records have no representation in this first schema. Do not implement global visibility by inserting NULL or special tenant IDs.
 
-The migration is committed but has not been executed against PostgreSQL. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
+Migration 014 backfills existing match rows only when each tenant/event ID resolves to exactly one stored event. It aborts on orphaned or ambiguous historical matches instead of guessing a connector. The migrations are committed but have not been executed against PostgreSQL. A separate privileged reviewer workflow and append-only status-transition audit are required before activation/revocation is implemented.
 
 ## Implemented deterministic matching
 
 Code:
 - `src/threat-intelligence.ts`: canonicalization, strict input validation, explicit event-field mapping, exact matching, validity/status checks, bounded candidate count, and evidence-linked match output.
-- `src/threat-intelligence-service.ts`: loads one stored event and active indicators inside a tenant-scoped database transaction, then inserts match records with database-enforced idempotency.
+- `src/threat-intelligence-service.ts`: loads one stored event by tenant + connector + event ID and active indicators inside a tenant-scoped database transaction, then inserts connector-scoped match records with database-enforced idempotency.
 - `src/threat-intelligence.test.ts`: unit tests for the pure normalization and matching functions.
 
 Supported indicator types:
@@ -81,7 +81,7 @@ Treat source descriptions, URLs, notes, and feed payloads as hostile text. Escap
 Still required:
 1. Execute migrations and PostgreSQL RLS smoke tests in CI and a disposable lab.
 2. Verify same-tenant matching and cross-tenant denial with live PostgreSQL.
-3. Test database match idempotency on replay.
+3. Test database match idempotency on replay, including two connectors that reuse the same event ID.
 4. Implement reviewer authorization and append-only status audit before activation/revocation.
 5. Connect the TLP evaluator to authenticated read/report/export paths only after recipient scope and membership are backed by trusted server-side identity and persisted data; test every path.
 6. Add property/fuzz tests for URL, IDNA, IP, and email edge cases.
