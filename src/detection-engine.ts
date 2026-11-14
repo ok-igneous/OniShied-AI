@@ -14,6 +14,7 @@ export type DetectionFinding = {
   first_seen_at: string;
   last_seen_at: string;
   evidence_event_ids: string[];
+  evidence_event_refs: Array<{ connector_id: string; event_id: string }>;
   grouping_key_hash: string;
   matched_conditions: string[];
   known_limitations: string[];
@@ -87,6 +88,10 @@ function makeFinding(input: {
     first_seen_at: events[0]!.observed_at,
     last_seen_at: events[events.length - 1]!.observed_at,
     evidence_event_ids: evidenceIds,
+    evidence_event_refs: events.map((event) => ({
+      connector_id: event.source.connector_id,
+      event_id: event.event_id
+    })),
     grouping_key_hash: groupingKeyHash,
     matched_conditions: input.matched,
     known_limitations: input.limitations
