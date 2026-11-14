@@ -354,6 +354,84 @@ BEGIN
      AND lease_token=p_lease_token;
 END $$;
 
+CREATE FUNCTION onishield.get_investigation_analysis_status(
+  p_token_hash TEXT,p_case_id UUID
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,onishield AS $
+DECLARE session_row RECORD; result JSONB;
+BEGIN
+  IF p_token_hash !~ '^[a-f0-9]{64}
+  p_token_hash TEXT,p_case_id UUID
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,onishield AS $$
+DECLARE session_row RECORD; result JSONB;
+BEGIN
+  IF p_token_hash !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'Invalid report request'; END IF;
+  SELECT ss.tenant_id,m.role INTO session_row
+    FROM onishield.operator_sessions ss
+    JOIN onishield.operators o ON o.id=ss.operator_id
+    JOIN onishield.operator_memberships m ON m.id=ss.membership_id
+      AND m.tenant_id=ss.tenant_id AND m.operator_id=ss.operator_id
+   WHERE ss.token_hash=p_token_hash AND ss.revoked_at IS NULL
+     AND ss.expires_at>NOW() AND o.status='active' AND m.status='active';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized investigation report'; END IF;
+  IF session_row.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
+    RAISE EXCEPTION 'Forbidden investigation report';
+  END IF;
+  PERFORM set_config('app.tenant_id',session_row.tenant_id,true);
+  SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r.version DESC),'[]'::jsonb)
+    INTO result FROM onishield.investigation_analysis_reports r
+   WHERE r.tenant_id=session_row.tenant_id AND r.case_id=p_case_id;
+  IF NOT EXISTS (SELECT 1 FROM onishield.investigation_cases c
+    WHERE c.tenant_id=session_row.tenant_id AND c.id=p_case_id) THEN
+    RAISE EXCEPTION 'Investigation case not found';
+  END IF;
+  RETURN result;
+END $$;
+
+REVOKE ALL ON FUNCTION onishield.request_investigation_analysis(TEXT,UUID,TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.load_investigation_analysis_input(TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.claim_investigation_analysis_job(TEXT,INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.complete_investigation_analysis_job(TEXT,UUID,UUID,TEXT,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.fail_investigation_analysis_job(TEXT,UUID,UUID,INTEGER,INTEGER,TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.list_investigation_analysis_reports(TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION onishield.get_investigation_analysis_status(TEXT,UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.request_investigation_analysis(TEXT,UUID,TEXT) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.list_investigation_analysis_reports(TEXT,UUID) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.get_investigation_analysis_status(TEXT,UUID) TO onishield_auth;
+GRANT EXECUTE ON FUNCTION onishield.load_investigation_analysis_input(TEXT,UUID) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.claim_investigation_analysis_job(TEXT,INTEGER) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.complete_investigation_analysis_job(TEXT,UUID,UUID,TEXT,TEXT,TEXT,TEXT,JSONB) TO onishield_app;
+GRANT EXECUTE ON FUNCTION onishield.fail_investigation_analysis_job(TEXT,UUID,UUID,INTEGER,INTEGER,TEXT) TO onishield_app;
+
+COMMIT;
+ THEN RAISE EXCEPTION 'Invalid investigation analysis status request'; END IF;
+  SELECT ss.tenant_id,m.role INTO session_row
+    FROM onishield.operator_sessions ss
+    JOIN onishield.operators o ON o.id=ss.operator_id
+    JOIN onishield.operator_memberships m ON m.id=ss.membership_id
+      AND m.tenant_id=ss.tenant_id AND m.operator_id=ss.operator_id
+   WHERE ss.token_hash=p_token_hash AND ss.revoked_at IS NULL
+     AND ss.expires_at>NOW() AND o.status='active' AND m.status='active';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized investigation analysis status'; END IF;
+  IF session_row.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
+    RAISE EXCEPTION 'Forbidden investigation analysis status';
+  END IF;
+  PERFORM set_config('app.tenant_id',session_row.tenant_id,true);
+  IF NOT EXISTS (SELECT 1 FROM onishield.investigation_cases c
+    WHERE c.tenant_id=session_row.tenant_id AND c.id=p_case_id) THEN
+    RAISE EXCEPTION 'Investigation case not found';
+  END IF;
+  SELECT to_jsonb(j) INTO result
+    FROM (
+      SELECT id AS job_id,status,attempts,created_at,updated_at,completed_at
+      FROM onishield.investigation_analysis_jobs
+      WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
+      ORDER BY created_at DESC LIMIT 1
+    ) j;
+  RETURN COALESCE(result,'null'::jsonb);
+END $;
+
 CREATE FUNCTION onishield.list_investigation_analysis_reports(
   p_token_hash TEXT,p_case_id UUID
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
