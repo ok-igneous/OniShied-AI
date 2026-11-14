@@ -173,7 +173,7 @@ async function verifyBackup() {
   const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
   const { manifest, info, iv, tag, keys } = await readBackup(artifactPath, manifestPath);
   await validateArchive(artifactPath, info, iv, tag, keys.encryptionKey);
-  process.stdout.write(`Backup integrity and PostgreSQL archive validation passed: ${manifest.backup_id}\\n`);
+  process.stdout.write(`Backup integrity and PostgreSQL archive validation passed: ${manifest.backup_id}\n`);
 }
 
 async function restoreBackup() {
@@ -207,7 +207,8 @@ async function restoreBackup() {
   if (Number(objectCount) !== 0) throw new Error("Restore target is not empty; no objects were changed");
   const { decipher, ciphertext } = decryptedStream(artifactPath, info, iv, tag, keys.encryptionKey);
   const child = spawn("pg_restore", [
-    "--no-password", "--exit-on-error", "--no-owner", "--no-acl", "--single-transaction"
+    "--no-password", "--exit-on-error", "--no-owner", "--no-acl",
+    "--single-transaction", "--dbname", target.database
   ], { env: postgresEnvironment(targetUrl), stdio: ["pipe", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf8");
@@ -220,7 +221,7 @@ async function restoreBackup() {
   });
   await Promise.all([pipeline(ciphertext, decipher, child.stdin), exit]);
   await invalidateRestoredAuthenticationState(targetUrl);
-  process.stdout.write(`Restore completed into isolated database ${target.database}; restored sessions and one-time authentication material were invalidated. Run application and tenant-integrity checks before any cutover.\\n`);
+  process.stdout.write(`Restore completed into isolated database ${target.database}; restored sessions and one-time authentication material were invalidated. Run application and tenant-integrity checks before any cutover.\n`);
 }
 
 async function invalidateRestoredAuthenticationState(targetUrl) {
