@@ -109,10 +109,26 @@ The uploader first invokes the local verifier, which checks manifest HMAC, encry
 
 Use a separate cloud account/project from production where practical. The backup identity should be limited to the dedicated bucket/prefix and upload/verification operations; production application identities must not be able to delete backups or alter bucket retention. Configure alerts for failed uploads, missing expected backups, and retention/configuration drift. S3-compatible providers vary: the destination must implement bucket versioning, Object Lock configuration, COMPLIANCE retention and the multipart APIs used by the AWS SDK. A generic endpoint alone does not prove those guarantees.
 
+
+### Retrieve and verify a remote backup
+
+The remote copy can be retrieved by the exact backup ID printed by the upload command. Choose destination paths whose filenames match the original artifact and manifest names; the command refuses to overwrite existing files.
+
+```sh
+export S3_BACKUP_ID='backup-id-from-upload-output'
+export BACKUP_ARTIFACT='/secure/restore/backup-id-from-manifest.pgdump.enc'
+export BACKUP_MANIFEST='/secure/restore/backup-id.manifest.json'
+node scripts/backup-s3.mjs download
+```
+
+The downloader fetches the exact version IDs returned by the bucket, checks object identity and COMPLIANCE retention metadata, verifies downloaded bytes against remote SHA-256 metadata and the authenticated manifest, then runs the full local archive verifier. A successful download is still not a restore drill; use the isolated PostgreSQL restore procedure above afterward.
+
 ## CLI actions
 
 - `node scripts/backup-postgres.mjs create`
 - `node scripts/backup-postgres.mjs verify`
 - `node scripts/backup-postgres.mjs restore`
+- `node scripts/backup-s3.mjs upload`
+- `node scripts/backup-s3.mjs download`
 
 All commands fail closed on missing key material, invalid manifest authentication, checksum mismatch, unknown artifact format, failed archive parsing, or unsafe restore target conditions.
