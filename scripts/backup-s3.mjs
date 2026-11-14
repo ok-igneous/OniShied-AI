@@ -91,7 +91,7 @@ async function main() {
   const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
   const bucket = required(process.env.S3_BUCKET, "S3_BUCKET");
   const region = process.env.S3_REGION || "us-east-1";
-  const prefix = (process.env.S3_PREFIX || "onishield/postgres").replace(/^\\/+|\\/+$/g, "");
+  const prefix = (process.env.S3_PREFIX || "onishield/postgres").split("/").filter(Boolean).join("/");
   const retentionDays = integerSetting(process.env.S3_RETENTION_DAYS, 90, "S3_RETENTION_DAYS", 1, 3650);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (!/^[A-Za-z0-9._-]{1,180}$/.test(manifest.backup_id || "") ||
