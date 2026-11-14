@@ -9,6 +9,7 @@ ALTER TABLE onishield.detection_findings
 -- The ingestion upsert may enrich evidence/timestamps but must not change status.
 REVOKE UPDATE ON onishield.detection_findings FROM onishield_app;
 GRANT UPDATE (
+  episode_anchor_connector_id, episode_anchor_event_id,
   first_seen_at, last_seen_at, evidence_event_refs, evidence_event_ids,
   matched_conditions, updated_at
 ) ON onishield.detection_findings TO onishield_app;
