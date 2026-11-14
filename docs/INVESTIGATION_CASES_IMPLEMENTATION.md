@@ -19,6 +19,17 @@
 - Duplicate finding association requests are idempotent; unique constraints protect concurrent duplicate writes.
 - Viewers can read investigation cases; only owner, admin, and security analyst can create cases, associate findings, or add notes. Mutations require recent step-up.
 
+## AI analysis pipeline (migration 020)
+
+- Durable tenant-scoped analysis jobs with lease tokens, expiry recovery, bounded retries, and dead-letter state.
+- Analysis requests require an authenticated owner/admin/security_analyst session and a recent five-minute step-up.
+- The separate worker uses the OpenAI Responses API with strict JSON Schema output. Configure OPENAI_API_KEY and OPENAI_MODEL; neither setting is required for the API server to start.
+- The worker receives bounded case/finding metadata, canonical event references and timestamps, and linked threat-intelligence provenance. Raw event payloads, credentials, and operator notes are not sent.
+- Model output is Zod-validated; every evidence citation must exactly match a canonical connector_id/event_id pair and timeline timestamps must match canonical event timestamps.
+- Reports are versioned and append-only. A database trigger rejects report UPDATE and DELETE. Report metadata records provider, model, template version, and evidence digest.
+- The worker has no tools or response execution path. Recommendations are advisory and every recommendation requires human approval.
+- New routes: POST /v1/operator/investigations/:caseId/analyze and GET /v1/operator/investigations/:caseId/reports. Worker command: npm run start:investigation-worker.
+
 ## Deliberate limitations
 
 - No AI provider integration, generated report, analysis worker, assignment API, case status transition API, dashboard, or automatic correlation yet.
@@ -26,7 +37,7 @@
 - One finding can belong to only one case in this release, including resolved cases; audited case merge/re-parenting is deferred.
 - Case priority is a snapshot at creation; it is not dynamically recomputed when finding severity changes.
 - Evidence is referenced from canonical finding evidence; event payloads are not copied into investigation records.
-- The SQL smoke test is authored but not executed. Migration 019 has not been applied to a live database. Typecheck, build, unit tests, and CI have not been run.
+- The SQL smoke tests are authored but not executed. Migrations 019 and 020 have not been applied to a live database. Typecheck, build, unit tests, and CI have not been run.
 - Concurrent duplicate protection relies on database uniqueness and transaction semantics; a concurrent database stress test remains outstanding.
 
 ## Verification gate
