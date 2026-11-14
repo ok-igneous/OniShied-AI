@@ -172,6 +172,9 @@ async function main() {
     }
   }
   const prefix = (process.env.S3_PREFIX || "onishield/postgres").split("/").filter(Boolean).join("/");
+  if (prefix.split("/").some(part => part === "." || part === "..")) {
+    throw new Error("S3_PREFIX cannot contain dot path segments");
+  }
   const client = new S3Client({
     region,
     ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
@@ -204,6 +207,7 @@ async function main() {
     const manifestPath = path.resolve(required(process.env.BACKUP_MANIFEST, "BACKUP_MANIFEST"));
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     if (!/^[A-Za-z0-9._-]{1,180}$/.test(manifest.backup_id || "") ||
+        path.basename(manifestPath) !== `${manifest.backup_id}.manifest.json` ||
         manifest.artifact !== path.basename(artifactPath)) {
       throw new Error("Backup manifest identity does not match the selected artifact");
     }
