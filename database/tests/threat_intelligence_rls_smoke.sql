@@ -59,11 +59,24 @@ SELECT tenant_id, 'connector-a', 'synthetic-event-1', id, version,
   FROM onishield.threat_indicators
  WHERE indicator_key = 'synthetic-indicator-1'
 ON CONFLICT (
-  tenant_id, event_id, indicator_id, indicator_version,
+  tenant_id, connector_id, event_id, indicator_id, indicator_version,
   matched_field_path, matcher_version
 ) DO NOTHING;
 
-DO $$
+-- Same event_id from a different connector is a distinct canonical event.
+INSERT INTO onishield.threat_indicator_matches
+  (tenant_id, connector_id, event_id, indicator_id, indicator_version,
+   matched_field_path, matcher_version)
+SELECT tenant_id, 'connector-b', 'synthetic-event-1', id, version,
+       'data.source_ip', 'exact-v1'
+  FROM onishield.threat_indicators
+ WHERE indicator_key = 'synthetic-indicator-1'
+ON CONFLICT (
+  tenant_id, connector_id, event_id, indicator_id, indicator_version,
+  matched_field_path, matcher_version
+) DO NOTHING;
+
+DO $
 DECLARE
   match_count INTEGER;
 BEGIN
