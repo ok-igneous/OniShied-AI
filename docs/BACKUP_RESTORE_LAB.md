@@ -125,6 +125,32 @@ node scripts/backup-s3.mjs download
 The downloader fetches the exact version IDs returned by the bucket, checks object identity and COMPLIANCE retention metadata, verifies downloaded bytes against remote SHA-256 metadata and the authenticated manifest, then runs the full local archive verifier. A successful download is still not a restore drill; use the isolated PostgreSQL restore procedure above afterward.
 
 
+## Immutable S3 vault recovery integration drill
+
+`scripts/backup-s3.integration.test.mjs` is an opt-in end-to-end test. It creates disposable PostgreSQL databases, creates an encrypted backup using an old active key, uploads the artifact and authenticated manifest to a dedicated versioned Object-Lock bucket, downloads and locally verifies the remote copy, and restores it into isolated databases. It then rotates the active key while retaining the historical key, repeats the historical remote restore, creates/uploads/downloads/restores a new-key backup, checks recovered application data and post-restore authentication invalidation, and confirms that removing the historical key makes the old artifact unverifiable.
+
+The test is deliberately skipped unless all of the following are explicitly configured:
+
+- `BACKUP_S3_TEST_ENABLE=YES_I_UNDERSTAND_IMMUTABLE_UPLOADS`
+- `BACKUP_S3_TEST_BUCKET`: a dedicated test bucket with versioning and Object Lock enabled; never point this at a production backup bucket.
+- `BACKUP_S3_TEST_PREFIX`: a dedicated prefix containing an `integration-tests` path segment.
+- `BACKUP_TEST_ADMIN_DATABASE_URL`: a PostgreSQL 16 test admin connection.
+- AWS SDK default credential-chain settings and, when needed, `S3_REGION`, `S3_ENDPOINT`, and `S3_FORCE_PATH_STYLE`.
+
+Example invocation in a protected test environment:
+
+```sh
+BACKUP_S3_TEST_ENABLE=YES_I_UNDERSTAND_IMMUTABLE_UPLOADS \
+BACKUP_S3_TEST_BUCKET='dedicated-test-bucket' \
+BACKUP_S3_TEST_PREFIX='onishield/integration-tests' \
+BACKUP_TEST_ADMIN_DATABASE_URL='postgresql://test_admin:REDACTED@127.0.0.1:5432/postgres' \
+node --test scripts/backup-s3.integration.test.mjs
+```
+
+The test uses one-day COMPLIANCE retention and intentionally does not delete remote objects; Object Lock makes that history immutable until retention expires. Each run generates unique backup IDs and database names, so it incurs storage cost and leaves test objects in the dedicated prefix. Apply a separately reviewed lifecycle policy after retention expires. Never grant the test identity permission to bypass retention or delete objects during their retention period.
+
+The regular CI workflow runs the test file, but it skips the live S3 scenario unless the explicit opt-in and dedicated test environment are supplied. A skipped test is not evidence that the remote vault works. Record a successful run against the actual intended provider before claiming remote recovery has been validated. S3-compatible implementations differ; only the real provider test can establish that versioning, COMPLIANCE retention, multipart upload, exact-version retrieval, and restore work together.
+
 ## Scheduled backup runner
 
 The runner is deliberately separate from the API process. Do not start a timer inside each Fastify worker: multiple application replicas could create duplicate schedules and make backups dependent on API uptime. Use exactly one dedicated host scheduler or managed scheduled-job instance.
