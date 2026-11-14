@@ -15,7 +15,11 @@ import {
 const action = process.argv[2];
 const backupDirectory = path.resolve(process.env.BACKUP_DIRECTORY || "./var/backups");
 const databaseUrl = process.env.DATABASE_URL;
-const keyring = loadBackupKeyring();
+let keyring;
+function getBackupKeyring() {
+  keyring ??= loadBackupKeyring();
+  return keyring;
+}
 
 function required(value, name) {
   if (!value) throw new Error(`${name} is required`);
@@ -47,7 +51,7 @@ async function readBackup(artifactPath, manifestPath) {
       info.size < BACKUP_HEADER_BYTES + BACKUP_TAG_BYTES + 1) {
     throw new Error("Backup manifest or artifact size is invalid");
   }
-  const keys = resolveBackupKeys(keyring, manifest.key_id);
+  const keys = resolveBackupKeys(getBackupKeyring(), manifest.key_id);
   if (!verifyBackupManifestSignature(manifest, keys.manifestKey)) {
     throw new Error("Backup manifest authentication failed");
   }
@@ -80,8 +84,9 @@ function decryptedStream(artifactPath, info, iv, tag, encryptionKey) {
 
 async function createBackup() {
   required(databaseUrl, "DATABASE_URL");
-  const keyId = keyring.activeKeyId;
-  const keys = resolveBackupKeys(keyring, keyId);
+  const activeKeyring = getBackupKeyring();
+  const keyId = activeKeyring.activeKeyId;
+  const keys = resolveBackupKeys(activeKeyring, keyId);
   await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
   await chmod(backupDirectory, 0o700);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}`;
