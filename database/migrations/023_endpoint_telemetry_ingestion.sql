@@ -165,9 +165,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  UPDATE onishield.endpoint_agents
-     SET last_seen_at=GREATEST(COALESCE(last_seen_at,'-infinity'::TIMESTAMPTZ),NOW())
-   WHERE tenant_id=trusted.tenant_id AND id=trusted.id;
+  UPDATE onishield.endpoint_agents AS current_agent
+     SET last_seen_at=GREATEST(COALESCE(current_agent.last_seen_at,'-infinity'::TIMESTAMPTZ),NOW())
+   WHERE current_agent.tenant_id=trusted.tenant_id AND current_agent.id=trusted.id;
   RETURN QUERY SELECT inserted_count,duplicates,trusted.id,trusted.tenant_id,normalized_events;
 END; $$;
 REVOKE ALL ON FUNCTION onishield.ingest_endpoint_telemetry(TEXT,JSONB) FROM PUBLIC;
