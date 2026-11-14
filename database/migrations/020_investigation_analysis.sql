@@ -154,15 +154,15 @@ BEGIN
    WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
      AND status IN ('pending','processing') ORDER BY created_at DESC LIMIT 1;
   IF job IS NOT NULL THEN RETURN job; END IF;
-  IF (SELECT count(*) FROM onishield.investigation_analysis_jobs j
-       WHERE j.tenant_id=session_row.tenant_id AND j.created_at>NOW()-INTERVAL '1 hour')>=30 THEN
-    RAISE EXCEPTION 'Investigation analysis tenant rate limit reached';
-  END IF;
   SELECT id INTO job FROM onishield.investigation_analysis_jobs
    WHERE tenant_id=session_row.tenant_id AND case_id=p_case_id
      AND created_at>NOW()-INTERVAL '10 minutes'
    ORDER BY created_at DESC LIMIT 1;
   IF job IS NOT NULL THEN RETURN job; END IF;
+  IF (SELECT count(*) FROM onishield.investigation_analysis_jobs j
+       WHERE j.tenant_id=session_row.tenant_id AND j.created_at>NOW()-INTERVAL '1 hour')>=30 THEN
+    RAISE EXCEPTION 'Investigation analysis tenant rate limit reached';
+  END IF;
   INSERT INTO onishield.investigation_analysis_jobs
     (tenant_id,case_id,requested_by_operator_id,requested_by_membership_id,request_id)
   VALUES(session_row.tenant_id,p_case_id,session_row.operator_id,session_row.membership_id,p_request_id)
