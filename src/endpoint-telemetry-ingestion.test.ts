@@ -35,3 +35,37 @@ test("rejects invalid IP and malformed timestamps",()=>{
   }]});
   assert.equal(result.success,false);
 });
+
+import { evaluateDetections } from "./detection-engine.js";
+
+test("endpoint-normalized authentication failures enter deterministic detection",()=>{
+  const events=Array.from({length:8},(_,index)=>({
+    schema_version:"0.1.0" as const,
+    event_id:`endpoint-event-${index+1}`,
+    tenant_id:"tenant-a",
+    source:{
+      connector_id:"endpoint:b3a2c4d6-1111-4111-8111-111111111111",
+      kind:"endpoint_agent",
+      version:"0.1.0",
+      host_ref:"workstation-01"
+    },
+    event_type:"identity.authentication.failure",
+    observed_at:new Date(Date.parse("2026-11-14T10:00:00.000Z")+index*30000).toISOString(),
+    severity_hint:"unknown" as const,
+    provenance:{record_ref:`endpoint-event-${index+1}`,collection_method:"agent" as const},
+    data:{
+      result:"failure",
+      mechanism:"remote",
+      principal_ref:"d".repeat(64),
+      source_address:"192.0.2.10",
+      endpoint_agent_id:"b3a2c4d6-1111-4111-8111-111111111111",
+      boot_id:"b3a2c4d6-3333-4333-8333-333333333333",
+      sequence:index+1,
+      agent_event_kind:"authentication"
+    }
+  }));
+  const findings=evaluateDetections(events);
+  assert.equal(findings.length,1);
+  assert.equal(findings[0]?.rule_id,"AUTH_FAILURE_BURST");
+  assert.equal(findings[0]?.evidence_event_refs.length,8);
+});
