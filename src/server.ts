@@ -11,7 +11,6 @@ import { ResendEmailDelivery } from "./email-delivery.js";
 import { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
 import { registerOperatorAccountRoutes } from "./operator-account-routes.js";
 import { registerDetectionFindingRoutes } from "./detection-finding-routes.js";
-
 const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey && config.mfaRecoveryPepper
   ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey, config.mfaRecoveryPepper)
   : null;
