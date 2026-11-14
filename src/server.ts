@@ -316,6 +316,35 @@ app.post<{ Params: { indicatorId: string } }>(
   }
 );
 
+app.get<{ Params: { findingId: string } }>(
+  "/v1/operator/findings/:findingId/history",
+  async (request, reply) => {
+    if (!operatorAuth) return reply.code(503).send({ error: "operator_auth_not_configured" });
+    const token = operatorBearer(request.headers.authorization);
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    if (!/^[a-f0-9]{64}$/.test(request.params.findingId)) {
+      return reply.code(400).send({ error: "invalid_finding_id" });
+    }
+    try {
+      const history = await operatorAuth.listDetectionFindingStatusAudit(token, request.params.findingId);
+      reply.header("cache-control", "no-store");
+      return { history };
+    } catch (error) {
+      if (error instanceof Error && error.message === "unauthorized") {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (error instanceof Error && error.message === "forbidden") {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      if (error instanceof Error && /Detection finding not found/.test(error.message)) {
+        return reply.code(404).send({ error: "finding_not_found" });
+      }
+      request.log.error({ err: error }, "Detection finding history unavailable");
+      return reply.code(503).send({ error: "finding_history_unavailable" });
+    }
+  }
+);
+
 app.post<{ Params: { findingId: string } }>(
   "/v1/operator/findings/:findingId/transition",
   async (request, reply) => {
