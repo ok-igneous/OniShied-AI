@@ -38,16 +38,19 @@ function timestamp(event: SecurityEventInput): number {
   return Date.parse(event.observed_at);
 }
 
+function compareEvents(a: SecurityEventInput, b: SecurityEventInput): number {
+  return timestamp(a) - timestamp(b) ||
+    a.source.connector_id.localeCompare(b.source.connector_id) ||
+    a.event_id.localeCompare(b.event_id);
+}
+
 function evidenceOrder(events: SecurityEventInput[]): SecurityEventInput[] {
   const unique = new Map<string, SecurityEventInput>();
   for (const event of events) {
     const key = JSON.stringify([event.tenant_id, event.source.connector_id, event.event_id]);
     if (!unique.has(key)) unique.set(key, event);
   }
-  return [...unique.values()].sort((a, b) =>
-    timestamp(a) - timestamp(b) ||
-    a.event_id.localeCompare(b.event_id)
-  );
+  return [...unique.values()].sort(compareEvents);
 }
 
 function makeFinding(input: {
@@ -60,9 +63,7 @@ function makeFinding(input: {
   matched: string[];
   limitations: string[];
 }): DetectionFinding {
-  const events = [...input.events].sort((a, b) =>
-    timestamp(a) - timestamp(b) || a.event_id.localeCompare(b.event_id)
-  );
+  const events = [...input.events].sort(compareEvents);
   const evidenceIds = events.map((event) => `${event.source.connector_id}:${event.event_id}`);
   const groupingKeyHash = digest(input.grouping);
   const findingId = digest([
