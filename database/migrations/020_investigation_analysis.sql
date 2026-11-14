@@ -246,7 +246,7 @@ BEGIN
              AND ti.version=tim.indicator_version
             JOIN onishield.threat_intelligence_sources src
               ON src.tenant_id=ti.tenant_id AND src.id=ti.source_id
-            WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id
+            WHERE ftm.tenant_id=f.tenant_id AND ftm.finding_id=f.finding_id AND ti.tlp='clear'
             ORDER BY tim.matched_at DESC LIMIT 20
           ) AS match_data
         ),'[]'::jsonb)
