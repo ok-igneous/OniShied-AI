@@ -1,8 +1,11 @@
+import type { PoolClient } from "pg";
 import { withTenantTransaction } from "./database.js";
 import {
   matchThreatIndicators,
+  type IndicatorMatch,
   type ThreatIndicator
 } from "./threat-intelligence.js";
+import { securityEventSchema, type SecurityEventInput } from "./security-event.js";
 
 const MAX_INDICATOR_CANDIDATES = 10_000;
 
@@ -28,8 +31,111 @@ interface StoredIndicatorRow {
   source_id: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+export type PersistedThreatIndicatorMatch = IndicatorMatch & {
+  tenant_id: string;
+  match_id: string;
+};
+
+async function matchEventIndicators(
+  client: PoolClient,
+  tenantId: string,
+  event: SecurityEventInput
+): Promise<PersistedThreatIndicatorMatch[]> {
+  if (event.tenant_id !== tenantId) {
+    throw new Error("Event tenant does not match threat-intelligence scope");
+  }
+
+  const indicatorResult = await client.query<StoredIndicatorRow>(
+    "SELECT id::text, version, indicator_type, value_normalized, " +
+    "status, valid_from::text, expires_at::text, confidence, tlp, source_id::text " +
+    "FROM onishield.threat_indicators " +
+    "WHERE tenant_id = $1 AND status = 'active' AND valid_from <= NOW() " +
+    "AND (expires_at IS NULL OR expires_at > NOW()) " +
+    "ORDER BY id LIMIT $2",
+    [tenantId, MAX_INDICATOR_CANDIDATES + 1]
+  );
+
+  if (indicatorResult.rows.length > MAX_INDICATOR_CANDIDATES) {
+    throw new Error("Tenant threat indicator candidate limit exceeded");
+  }
+
+  const indicators: ThreatIndicator[] = indicatorResult.rows.map((row) => ({
+    id: row.id,
+    version: row.version,
+    type: row.indicator_type,
+    value_normalized: row.value_normalized,
+    status: row.status,
+    valid_from: row.valid_from,
+    expires_at: row.expires_at,
+    confidence: row.confidence,
+    tlp: row.tlp,
+    source_id: row.source_id
+  }));
+
+  const matches = matchThreatIndicators({
+    connectorId: event.source.connector_id,
+    eventId: event.event_id,
+    data: event.data,
+    indicators
+  });
+
+  const persistedMatches: PersistedThreatIndicatorMatch[] = [];
+  for (const match of matches) {
+    const values = [
+      tenantId,
+      match.connector_id,
+      match.event_id,
+      match.indicator_id,
+      match.indicator_version,
+      match.matched_field_path,
+      match.matcher_version
+    ];
+
+    const inserted = await client.query<StoredMatchRow>(
+      "INSERT INTO onishield.threat_indicator_matches " +
+      "(tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
+      "matched_field_path, matcher_version, matched_at) " +
+      "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) " +
+      "ON CONFLICT (tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
+      "matched_field_path, matcher_version) DO NOTHING " +
+      "RETURNING id::text, matched_at::text",
+      [...values, match.matched_at]
+    );
+
+    const stored = inserted.rows[0] ?? (await client.query<StoredMatchRow>(
+      "SELECT id::text, matched_at::text " +
+      "FROM onishield.threat_indicator_matches " +
+      "WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3 " +
+      "AND indicator_id = $4 AND indicator_version = $5 " +
+      "AND matched_field_path = $6 AND matcher_version = $7",
+      values
+    )).rows[0];
+
+    if (!stored) {
+      throw new Error("Persisted threat indicator match could not be read");
+    }
+
+    persistedMatches.push({
+      ...match,
+      tenant_id: tenantId,
+      match_id: stored.id,
+      matched_at: stored.matched_at
+    });
+  }
+
+  return persistedMatches;
+}
+
+/**
+ * Matches an already validated event inside the caller's tenant transaction.
+ * No network requests or response actions are performed.
+ */
+export function matchEventIndicatorsInTransaction(
+  client: PoolClient,
+  tenantId: string,
+  event: SecurityEventInput
+): Promise<PersistedThreatIndicatorMatch[]> {
+  return matchEventIndicators(client, tenantId, event);
 }
 
 /**
@@ -40,7 +146,7 @@ export async function matchStoredEventIndicators(input: {
   tenantId: string;
   connectorId: string;
   eventId: string;
-}) {
+}): Promise<PersistedThreatIndicatorMatch[]> {
   if (!input.tenantId || !input.connectorId || !input.eventId) {
     throw new Error("Tenant, connector, and event identifiers are required");
   }
@@ -56,93 +162,14 @@ export async function matchStoredEventIndicators(input: {
       throw new Error("Security event not found in the requested tenant scope");
     }
 
-    const eventDocument = eventResult.rows[0]?.event_json;
-    if (!isRecord(eventDocument) || !isRecord(eventDocument.data)) {
-      throw new Error("Stored security event has an invalid data structure");
+    const parsed = securityEventSchema.safeParse(eventResult.rows[0]?.event_json);
+    if (!parsed.success ||
+        parsed.data.tenant_id !== input.tenantId ||
+        parsed.data.source.connector_id !== input.connectorId ||
+        parsed.data.event_id !== input.eventId) {
+      throw new Error("Stored security event identity or schema is invalid");
     }
 
-    const indicatorResult = await client.query<StoredIndicatorRow>(
-      "SELECT id::text, version, indicator_type, value_normalized, " +
-      "status, valid_from::text, expires_at::text, confidence, tlp, source_id::text " +
-      "FROM onishield.threat_indicators " +
-      "WHERE tenant_id = $1 AND status = 'active' AND valid_from <= NOW() " +
-      "AND (expires_at IS NULL OR expires_at > NOW()) " +
-      "ORDER BY id LIMIT $2",
-      [input.tenantId, MAX_INDICATOR_CANDIDATES + 1]
-    );
-
-    if (indicatorResult.rows.length > MAX_INDICATOR_CANDIDATES) {
-      throw new Error("Tenant threat indicator candidate limit exceeded");
-    }
-
-    const indicators: ThreatIndicator[] = indicatorResult.rows.map((row) => ({
-      id: row.id,
-      version: row.version,
-      type: row.indicator_type,
-      value_normalized: row.value_normalized,
-      status: row.status,
-      valid_from: row.valid_from,
-      expires_at: row.expires_at,
-      confidence: row.confidence,
-      tlp: row.tlp,
-      source_id: row.source_id
-    }));
-
-    const matches = matchThreatIndicators({
-      connectorId: input.connectorId,
-      eventId: input.eventId,
-      data: eventDocument.data,
-      indicators
-    });
-
-    const persistedMatches: Array<typeof matches[number] & {
-      tenant_id: string;
-      match_id: string;
-    }> = [];
-
-    for (const match of matches) {
-      const values = [
-        input.tenantId,
-        match.connector_id,
-        match.event_id,
-        match.indicator_id,
-        match.indicator_version,
-        match.matched_field_path,
-        match.matcher_version
-      ];
-
-      const inserted = await client.query<StoredMatchRow>(
-        "INSERT INTO onishield.threat_indicator_matches " +
-        "(tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
-        "matched_field_path, matcher_version, matched_at) " +
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) " +
-        "ON CONFLICT (tenant_id, connector_id, event_id, indicator_id, indicator_version, " +
-        "matched_field_path, matcher_version) DO NOTHING " +
-        "RETURNING id::text, matched_at::text",
-        [...values, match.matched_at]
-      );
-
-      const stored = inserted.rows[0] ?? (await client.query<StoredMatchRow>(
-        "SELECT id::text, matched_at::text " +
-        "FROM onishield.threat_indicator_matches " +
-        "WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3 " +
-        "AND indicator_id = $4 AND indicator_version = $5 " +
-        "AND matched_field_path = $6 AND matcher_version = $7",
-        values
-      )).rows[0];
-
-      if (!stored) {
-        throw new Error("Persisted threat indicator match could not be read");
-      }
-
-      persistedMatches.push({
-        ...match,
-        tenant_id: input.tenantId,
-        match_id: stored.id,
-        matched_at: stored.matched_at
-      });
-    }
-
-    return persistedMatches;
+    return matchEventIndicators(client, input.tenantId, parsed.data);
   });
 }
