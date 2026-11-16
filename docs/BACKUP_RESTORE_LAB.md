@@ -2,7 +2,8 @@
 
 **Status:** Draft implementation on an unmerged branch; integration drill is wired into CI but has not yet passed.  
 **Scope:** One PostgreSQL database, encrypted local artifact, authenticated manifest, archive verification, isolated restore, and optional S3-compatible immutable upload/download.  
-**Not included:** Scheduler, WAL/PITR, object/evidence backup, tenant-level selective restore, production dashboard, or measured RPO/RTO.
+**Not included:** Scheduler, WAL/PITR, object/evidence backup, tenant-level selective restore, production dashboard, or measured RPO/RTO.  
+**Storage policy:** See [BACKUP_STORAGE_AND_CUSTODY_POLICY.md](BACKUP_STORAGE_AND_CUSTODY_POLICY.md) for the dual-custody target: customer-controlled copy plus independently administered OniShield off-site copy; enterprise adds a third isolated/immutable copy.
 
 ## Prerequisites
 
@@ -223,3 +224,14 @@ The keyring accepts 1–32 entries. IDs are restricted to 1–64 safe characters
 ## Key-rotation recovery integration drill
 
 The PostgreSQL 16 integration test now exercises the complete rotation sequence against disposable databases: create and verify a backup with the old active key; switch the active key while retaining the old key; verify and restore that historical artifact; create a new backup and assert its manifest names the new key ID; verify and restore the new artifact; and finally remove the historical key from the test keyring and assert that verification fails closed. Both restored databases are checked for the expected application row and post-restore authentication-state invalidation. This test is authored and wired into the existing PostgreSQL integration-test step; it has not been observed passing in this environment.
+
+
+## Provider-neutral rollout and current no-cloud position
+
+AWS S3 is **not required** to develop or validate the local backup engine. The current S3-compatible adapter is optional and remains unverified against a real provider. Do not provision AWS merely to proceed with local PostgreSQL recovery testing.
+
+- Local mode: leave `S3_BUCKET` unset and do not set `BACKUP_UPLOAD_REQUIRED=true`. The runner is intended to complete create → local verify without a remote provider in this mode. Confirm this behavior with an executed test before relying on it.
+- Remote mode: configure a selected S3-compatible provider only after choosing a provider and completing its versioning/Object-Lock compatibility and security review.
+- If a deployment requires off-site protection, set `BACKUP_UPLOAD_REQUIRED=true`; missing remote configuration must fail the run rather than silently downgrade to local-only.
+- A local-only run must be labelled **local-only / off-site protection not configured** in operator status and customer-facing reporting. Never describe it as dual-custody or disaster-recovery protected.
+- The intended product target is dual custody: client-controlled encrypted copy plus OniShield-managed remote copy. Enterprise target adds a third isolated/immutable copy. These are product requirements, not current implemented capabilities.
