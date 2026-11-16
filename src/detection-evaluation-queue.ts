@@ -115,3 +115,24 @@ export async function processOneDetectionEvaluation(tenantId: string): Promise<b
   }
   return true;
 }
+
+/** Read the durable state for one event without exposing another tenant's jobs. */
+export async function getDetectionEvaluationStatus(
+  tenantId: string,
+  connectorId: string,
+  eventId: string
+): Promise<"pending" | "processing" | "completed" | "failed"> {
+  return withTenantTransaction(tenantId, async (client) => {
+    const result = await client.query<{ status: string }>(
+      `SELECT status
+         FROM onishield.detection_evaluation_jobs
+        WHERE tenant_id = $1 AND connector_id = $2 AND event_id = $3`,
+      [tenantId, connectorId, eventId]
+    );
+    const status = result.rows[0]?.status;
+    if (status === "completed") return "completed";
+    if (status === "processing") return "processing";
+    if (status === "dead_letter") return "failed";
+    return "pending";
+  });
+}
