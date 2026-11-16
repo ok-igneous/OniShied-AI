@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test src/*.test.ts",
     "check:lines": "node scripts/check-source-lines.mjs",
-    "test:backup": "node --test scripts/backup-crypto.test.mjs scripts/backup-keyring.test.mjs",
+    "test:backup": "node --test scripts/backup-crypto.test.mjs scripts/backup-keyring.test.mjs scripts/backup-customer-copy.test.mjs",
     "backup:run": "node scripts/backup-runner.mjs",
     "backup:health": "node scripts/backup-health.mjs",
     "test:backup:s3": "node --test scripts/backup-s3.integration.test.mjs"
