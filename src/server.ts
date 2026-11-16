@@ -470,7 +470,9 @@ app.post("/v1/events", async (request, reply) => {
     const jobStatus = await getDetectionEvaluationStatus(
       config.tenantId, config.connectorId, event.event_id
     );
-    const detectionStatus = jobStatus === "completed" ? "evaluated" : "pending";
+    const detectionStatus = jobStatus === "completed"
+      ? "evaluated"
+      : jobStatus === "failed" ? "failed" : "pending";
 
     if (outcome === "duplicate") {
       return reply.code(200).send({
