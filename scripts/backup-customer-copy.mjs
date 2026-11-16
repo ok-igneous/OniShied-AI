@@ -40,23 +40,38 @@ export async function copyVerifiedBackupPair({ artifactPath, manifestPath, desti
   if (!destinationDirectory) throw new Error("Customer backup destination is required");
   const artifactName = path.basename(artifactPath);
   const manifestName = path.basename(manifestPath);
-  if (artifactName !== path.basename(artifactPath) || manifestName !== path.basename(manifestPath) ||
-      !artifactName.endsWith(".pgdump.enc") || !manifestName.endsWith(".manifest.json")) {
+  if (!artifactName.endsWith(".pgdump.enc") || !manifestName.endsWith(".manifest.json") ||
+      artifactName.includes(path.sep) || manifestName.includes(path.sep)) {
     throw new Error("Unsafe customer backup filenames");
   }
+  const [artifactSourceInfo, manifestSourceInfo] = await Promise.all([
+    lstat(artifactPath), lstat(manifestPath)
+  ]);
+  if (!artifactSourceInfo.isFile() || artifactSourceInfo.isSymbolicLink() ||
+      !manifestSourceInfo.isFile() || manifestSourceInfo.isSymbolicLink() ||
+      artifactSourceInfo.size <= 0 || manifestSourceInfo.size <= 0) {
+    throw new Error("Customer backup source files must be non-empty regular files, not symlinks");
+  }
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  if (manifest.artifact !== artifactName || !manifest.backup_id ||
-      manifestName !== `${manifest.backup_id}.manifest.json`) {
+  if (typeof manifest.backup_id !== "string" ||
+      !/^[A-Za-z0-9._-]+$/.test(manifest.backup_id) ||
+      manifest.artifact !== artifactName ||
+      manifestName !== `${manifest.backup_id}.manifest.json` ||
+      manifest.encrypted_bytes !== artifactSourceInfo.size) {
     throw new Error("Customer backup manifest does not match its artifact");
   }
 
   const sourceDirectory = await realpath(path.dirname(artifactPath));
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 });
-  const destinationRoot = await realpath(destinationDirectory);
-  const destinationInfo = await lstat(destinationRoot);
-  if (!destinationInfo.isDirectory() || destinationInfo.isSymbolicLink()) {
-    throw new Error("Customer backup destination must be a real directory");
+  // Check the caller-supplied final path before realpath: checking only the resolved
+  // path would silently accept a symlink and make the symlink test ineffective.
+  const suppliedDestinationInfo = await lstat(destinationDirectory);
+  if (!suppliedDestinationInfo.isDirectory() || suppliedDestinationInfo.isSymbolicLink()) {
+    throw new Error("Customer backup destination must be a real directory, not a symlink");
   }
+  const destinationRoot = await realpath(destinationDirectory);
+  const destinationInfo = await stat(destinationRoot);
+  await chmod(destinationRoot, 0o700);
   if (destinationRoot === sourceDirectory ||
       destinationRoot.startsWith(sourceDirectory + path.sep) ||
       sourceDirectory.startsWith(destinationRoot + path.sep)) {
