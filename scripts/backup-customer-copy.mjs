@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { link, lstat, mkdir, realpath, rm, stat, chmod } from "node:fs/promises";
+import { link, lstat, mkdir, realpath, rm, stat, chmod, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
@@ -12,7 +12,7 @@ async function sha256(filePath) {
 }
 
 async function copyImmutableName(sourcePath, destinationPath) {
-  const temporaryPath = `${destinationPath}.${process.pid}.${cryptoRandomId()}.partial`;
+  const temporaryPath = `${destinationPath}.${process.pid}.${randomUUID()}.partial`;
   try {
     await pipeline(
       createReadStream(sourcePath),
@@ -35,9 +35,6 @@ async function copyImmutableName(sourcePath, destinationPath) {
   }
 }
 
-function cryptoRandomId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
 
 export async function copyVerifiedBackupPair({ artifactPath, manifestPath, destinationDirectory }) {
   if (!destinationDirectory) throw new Error("Customer backup destination is required");
@@ -47,7 +44,7 @@ export async function copyVerifiedBackupPair({ artifactPath, manifestPath, desti
       !artifactName.endsWith(".pgdump.enc") || !manifestName.endsWith(".manifest.json")) {
     throw new Error("Unsafe customer backup filenames");
   }
-  const manifest = JSON.parse(await (await import("node:fs/promises")).readFile(manifestPath, "utf8"));
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (manifest.artifact !== artifactName || !manifest.backup_id ||
       manifestName !== `${manifest.backup_id}.manifest.json`) {
     throw new Error("Customer backup manifest does not match its artifact");
