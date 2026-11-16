@@ -53,3 +53,10 @@ A successful CI run must be observed before treating the database controls or ap
 8. Only after those gates, implement a reversible lab action and then explicitly opt-in low-risk automation. Tier 2 always requires approval; Tier 3 remains excluded.
 
 Do not describe OniShield AI as production-ready, fully protective, or autonomously responding to threats.
+
+
+## Backup storage custody policy update (2026-11-16)
+
+The normative dual-custody policy is documented in [BACKUP_STORAGE_AND_CUSTODY_POLICY.md](BACKUP_STORAGE_AND_CUSTODY_POLICY.md): customer-controlled encrypted copy plus an independently administered OniShield-managed off-site copy when included in the plan; Enterprise target adds a third isolated/immutable copy. Proposed Basic/Professional/Enterprise entitlements, quota/overage rules, key-custody modes, tenant isolation, retention, restore authorization and rollout gates are specified but are **not implemented or commercially finalized**.
+
+AWS S3 is not a prerequisite for local backup development. The S3-compatible adapter remains optional and no provider has been configured or tested. Local-only backup must never be represented as off-site or dual-custody protection. The current backup CLI, runner, status reporting and health check have not been executed successfully; confirm that local-only runner mode behaves as intended before relying on it. No customer-hosted agent/destination integration, managed remote storage service, quota enforcement, customer dashboard, scheduling service, alerts, or measured RPO/RTO is implemented.
