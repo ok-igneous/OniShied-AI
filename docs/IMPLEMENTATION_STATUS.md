@@ -79,3 +79,6 @@ A subsequent CI run 538 (run ID `43845147716`) for the latest documentation comm
 ### Latest backup branch validation observation (2026-11-16, run 541)
 
 The latest customer-copy hardening commit `7563c544f1fc66e0f13ba2aa4d23cd30d814df32` triggered GitHub Actions run 541 (run ID `43845247093`). Attempt 1 completed with failure; its `validate` job returned an empty step list and the job-log endpoint returned 404 BlobNotFound. A rerun of the failed job was accepted by GitHub and attempt 2 was observed queued at 10:03 UTC. No test execution or passing result has yet been observed. The reason for the pre-step failure remains unknown; do not attribute it to billing, runner allocation, code or tests without actual annotations/logs.
+
+
+A further workflow run 542 (run ID `43845363650`) for commit `84e26a29964c69d5b9942b29eba836230f4cef86` also completed with failure before any steps were exposed: its `validate` job step list was empty. No test result can be inferred. This repeats the pre-step CI integration failure and still does not establish its cause.
