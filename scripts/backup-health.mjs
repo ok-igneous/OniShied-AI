@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { verifyCustomerBackupPair } from "./backup-customer-copy.mjs";
 
 function fail(message) {
   process.stderr.write(`BACKUP HEALTH FAILED: ${message}\n`);
@@ -51,6 +52,31 @@ async function main() {
     throw new Error("Encrypted artifact size does not match its manifest");
   }
 
+  let customerCopy = "not_configured";
+  if (process.env.CUSTOMER_BACKUP_DIRECTORY) {
+    if (!status.customer_artifact || !status.customer_manifest ||
+        !["copied_and_checksum_verified_on_separate_device", "copied_and_checksum_verified_same_device"].includes(status.customer_copy)) {
+      if (process.env.BACKUP_CUSTOMER_COPY_REQUIRED === "true") {
+        throw new Error("Required customer-controlled backup copy is not recorded as complete");
+      }
+      customerCopy = "not_verified";
+    } else {
+      await verifyCustomerBackupPair({
+        artifactPath: path.join(directory, status.artifact),
+        manifestPath: path.join(directory, status.manifest),
+        destinationDirectory: process.env.CUSTOMER_BACKUP_DIRECTORY
+      });
+      customerCopy = status.customer_copy;
+    }
+  } else if (process.env.BACKUP_CUSTOMER_COPY_REQUIRED === "true") {
+    throw new Error("BACKUP_CUSTOMER_COPY_REQUIRED is true but CUSTOMER_BACKUP_DIRECTORY is not configured");
+  }
+
+  if (process.env.BACKUP_CUSTOMER_COPY_REQUIRED === "true" &&
+      status.customer_copy !== "copied_and_checksum_verified_on_separate_device") {
+    throw new Error("Required customer backup is not on a separate filesystem device");
+  }
+
   if (process.env.BACKUP_UPLOAD_REQUIRED === "true" &&
       status.remote_upload !== "uploaded_and_remote_metadata_verified") {
     throw new Error("Mandatory off-site backup upload is not recorded as successful");
@@ -62,7 +88,15 @@ async function main() {
     completed_at: status.completed_at,
     age_hours: Number(ageHours.toFixed(2)),
     local_artifact: "present_and_size_matched",
-    remote_upload: status.remote_upload || "not_recorded"
+    customer_copy: customerCopy,
+    remote_upload: status.remote_upload || "not_recorded",
+    protection_level: status.remote_upload === "uploaded_and_remote_metadata_verified" && customerCopy.startsWith("copied_and_checksum_verified_on_separate_device")
+      ? "customer_copy_plus_remote_vault"
+      : status.remote_upload === "uploaded_and_remote_metadata_verified"
+        ? "remote_vault_only"
+        : customerCopy.startsWith("copied_and_checksum_verified_on_separate_device")
+          ? "local_plus_customer_separate_device"
+          : "local_only_or_not_independently_verified"
   }, null, 2) + "\n");
 }
 
