@@ -235,3 +235,25 @@ AWS S3 is **not required** to develop or validate the local backup engine. The c
 - If a deployment requires off-site protection, set `BACKUP_UPLOAD_REQUIRED=true`; missing remote configuration must fail the run rather than silently downgrade to local-only.
 - A local-only run must be labelled **local-only / off-site protection not configured** in operator status and customer-facing reporting. Never describe it as dual-custody or disaster-recovery protected.
 - The intended product target is dual custody: client-controlled encrypted copy plus OniShield-managed remote copy. Enterprise target adds a third isolated/immutable copy. These are product requirements, not current implemented capabilities.
+
+
+## Customer-controlled backup destination (filesystem/NAS mount)
+
+The runner can optionally copy the already encrypted artifact and authenticated manifest to a customer-controlled directory, such as a separately mounted NAS or backup volume. This does not require AWS or any cloud account. The destination must be mounted and writable by the backup process; this feature does not create a network share or install an agent on a customer's separate computer.
+
+Configure:
+- `CUSTOMER_BACKUP_DIRECTORY`: absolute path to the customer-controlled destination.
+- `BACKUP_CUSTOMER_COPY_REQUIRED=true`: fail the run if the customer destination is not configured or the copy cannot be completed.
+- `BACKUP_CUSTOMER_COPY_REQUIRE_SEPARATE_DEVICE=false`: optional explicit override for lab/testing only. By default, the runner rejects a destination on the same filesystem device because it is not an independent local recovery copy.
+
+The runner copies the encrypted artifact and manifest without decrypting them, publishes each completed file without overwriting an existing backup, and checks byte counts and SHA-256 digests. Health checks re-check the customer copy against the local verified pair. A copied pair on the same filesystem is labelled as same-device and is not counted as an independent recovery layer. A separate filesystem device is still not proof of off-site protection: the destination must be physically or administratively independent to survive the relevant incident.
+
+Example environment (paths are illustrative):
+```sh
+export CUSTOMER_BACKUP_DIRECTORY='/mnt/customer-backup/onishield'
+export BACKUP_CUSTOMER_COPY_REQUIRED=true
+npm run backup:run
+npm run backup:health
+```
+
+The customer destination is optional unless explicitly marked required. With no customer destination and no mandatory remote upload, the runner remains local-only. Neither customer-mounted destination handling nor the end-to-end runner has yet been runtime-tested in this repository environment.
