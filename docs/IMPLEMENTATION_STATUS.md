@@ -10,7 +10,8 @@
 - Tenant-scoped PostgreSQL transactions and RLS policies for security events.
 - Separate owner, migrator, and runtime database roles with least-privilege runtime grants.
 - Synthetic event fixture and localhost-only replay script.
-- Detection evaluation refuses to process a truncated time window: it fetches one row beyond the 5,000-event ceiling and fails the evaluation explicitly when the ceiling is exceeded. The accepted event remains durable and is reported as pending detection; no incomplete finding set is published.
+- Detection evaluation refuses to process a truncated time window: it fetches one row beyond the 5,000-event ceiling and fails explicitly when the ceiling is exceeded. The accepted event remains durable and is reported as pending; no incomplete finding set is published.
+- Durable detection evaluation queue foundation: migration 016 adds a tenant-RLS-protected, event-linked queue with idempotent enqueue, pending/processing/completed/dead-letter states, retry counters, delayed retry, and expiring worker leases. Event acceptance and queue insertion share one PostgreSQL transaction. A single in-process worker drains jobs; finding persistence remains idempotent so a crash after evaluation but before job completion can safely replay. A database smoke script covers queue idempotency and tenant isolation. This code and migration are not runtime-verified.
 - Source-file line-count enforcement with a hard 500-line maximum in CI.
 - Deterministic threat-indicator normalization and exact matching for explicitly mapped event fields.
 - Tenant-scoped threat-intelligence tables, match persistence, and database uniqueness for idempotent match records.
