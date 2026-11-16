@@ -36,7 +36,7 @@ async function claimDetectionJob(tenantId: string): Promise<ClaimedJob | null> {
           WHERE j.tenant_id = $1
             AND (
               (j.status = 'pending' AND j.available_at <= NOW())
-              OR (j.status = 'processing' AND j.locked_at < NOW() - INTERVAL '2 minutes')
+              OR (j.status = 'processing' AND j.locked_at < NOW() - INTERVAL '10 minutes')
             )
           ORDER BY j.available_at ASC, j.id ASC
           FOR UPDATE SKIP LOCKED
