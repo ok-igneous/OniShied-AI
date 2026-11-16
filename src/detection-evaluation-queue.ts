@@ -31,7 +31,7 @@ async function claimDetectionJob(tenantId: string): Promise<ClaimedJob | null> {
   return withTenantTransaction(tenantId, async (client) => {
     const result = await client.query<ClaimedJob>(
       `WITH candidate AS (
-         SELECT j.id
+         SELECT j.id, j.connector_id, j.event_id
            FROM onishield.detection_evaluation_jobs AS j
           WHERE j.tenant_id = $1
             AND (
@@ -50,8 +50,8 @@ async function claimDetectionJob(tenantId: string): Promise<ClaimedJob | null> {
          FROM candidate AS c
          JOIN onishield.security_events AS e
            ON e.tenant_id = $1
-          AND e.connector_id = j.connector_id
-          AND e.event_id = j.event_id
+          AND e.connector_id = c.connector_id
+          AND e.event_id = c.event_id
         WHERE j.id = c.id
        RETURNING j.id::text, e.event_json`,
       [tenantId]
