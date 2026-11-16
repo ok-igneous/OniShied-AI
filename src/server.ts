@@ -35,6 +35,21 @@ const app = Fastify({
   requestTimeout: 10_000
 });
 
+// A single in-process worker drains durable jobs. SKIP LOCKED and expiring
+// leases permit safe multi-instance deployment later without double claims.
+let detectionWorkerBusy = false;
+const detectionWorker = setInterval(async () => {
+  if (detectionWorkerBusy) return;
+  detectionWorkerBusy = true;
+  try {
+    await processOneDetectionEvaluation(config.tenantId);
+  } catch (error) {
+    app.log.error({ err: error }, "Detection worker iteration failed");
+  } finally {
+    detectionWorkerBusy = false;
+  }
+}, 1_000);
+
 const accountLifecycle = authPool && config.authRateLimitSecret && config.mfaRecoveryPepper &&
   config.resendApiKey && config.emailFrom && config.publicUrl
   ? new OperatorAccountLifecycle(
@@ -479,6 +494,7 @@ app.post("/v1/events", async (request, reply) => {
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "Shutting down");
+  clearInterval(detectionWorker);
   await app.close();
   await pool.end();
   await authPool?.end();
