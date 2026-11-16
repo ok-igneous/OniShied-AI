@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, rename, rm, stat, chmod, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { copyVerifiedBackupPair } from "./backup-customer-copy.mjs";
 import { fileURLToPath } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -56,6 +57,10 @@ async function main() {
     artifact: null,
     manifest: null,
     remote_upload: "not_configured",
+    customer_copy: "not_configured",
+    customer_artifact: null,
+    customer_manifest: null,
+    customer_copy_separate_device: null,
     failure: null
   };
 
@@ -92,6 +97,30 @@ async function main() {
     status.manifest = manifest;
     status.local_verification = "passed";
     await saveStatus(status);
+
+    if (process.env.CUSTOMER_BACKUP_DIRECTORY) {
+      status.customer_copy = "pending";
+      await saveStatus(status);
+      const copy = await copyVerifiedBackupPair({
+        artifactPath,
+        manifestPath,
+        destinationDirectory: process.env.CUSTOMER_BACKUP_DIRECTORY
+      });
+      status.customer_artifact = copy.artifact;
+      status.customer_manifest = copy.manifest;
+      status.customer_copy_separate_device = copy.separate_device;
+      if (process.env.BACKUP_CUSTOMER_COPY_REQUIRE_SEPARATE_DEVICE !== "false" && !copy.separate_device) {
+        status.customer_copy = "copied_but_same_device";
+        throw new Error("Customer backup destination is on the same filesystem device; it is not an independent recovery copy");
+      }
+      status.customer_copy = copy.separate_device
+        ? "copied_and_checksum_verified_on_separate_device"
+        : "copied_and_checksum_verified_same_device";
+      await saveStatus(status);
+    } else if (process.env.BACKUP_CUSTOMER_COPY_REQUIRED === "true") {
+      status.customer_copy = "required_but_not_configured";
+      throw new Error("BACKUP_CUSTOMER_COPY_REQUIRED is true but CUSTOMER_BACKUP_DIRECTORY is not configured");
+    }
 
     if (process.env.S3_BUCKET) {
       status.remote_upload = "pending";
