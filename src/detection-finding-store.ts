@@ -117,6 +117,8 @@ export async function evaluateAndPersistAroundEvent(
     throw new Error("Event tenant does not match detection scope");
   }
   return withTenantTransaction(tenantId, async (client) => {
+    // Fetch one row beyond the evaluation ceiling. Never silently evaluate a
+    // truncated window: doing so could omit evidence and create false negatives.
     const rows = await client.query<{ event_json: unknown }>(
       `SELECT event_json
          FROM onishield.security_events
@@ -124,9 +126,12 @@ export async function evaluateAndPersistAroundEvent(
           AND observed_at >= $2::timestamptz - INTERVAL '10 minutes'
           AND observed_at <= $2::timestamptz + INTERVAL '10 minutes'
         ORDER BY observed_at ASC, connector_id ASC, event_id ASC
-        LIMIT 5000`,
+        LIMIT 5001`,
       [tenantId, event.observed_at]
     );
+    if (rows.rows.length > 5000) {
+      throw new Error("Detection evaluation window exceeds the 5000-event safety limit");
+    }
 
     const events: SecurityEventInput[] = [];
     for (const row of rows.rows) {

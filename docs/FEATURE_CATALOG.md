@@ -1,6 +1,6 @@
 # OniShield AI — Product Feature Catalogue
 
-**Last updated:** 2026-11-13  
+**Last updated:** 2026-11-14  
 **Document type:** Product scope and capability register  
 **Product status:** Early-stage foundation; not production-ready.
 
@@ -35,9 +35,10 @@ No item should be promoted to verified or production-ready without repeatable te
 | Identity and tenant control plane | Operator identity, organizations, memberships, roles, tenant boundaries, policy and device enrollment | Partial; backend foundation implemented, unverified |
 | Security event ingestion | Authenticated ingestion, validation, canonical event format, provenance and deduplication | Implemented in repository, unverified |
 | Event normalization | Normalize supported source events into a versioned canonical schema | Partial; schema and initial paths exist, end-to-end verification pending |
-| Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Design/roadmap; initial detection engine not implemented |
+| Deterministic detection | Explainable rules, severity, confidence, evidence references and false-positive handling | Initial deterministic engine, bounded event-window evaluation, and tests exist in code; unverified and incomplete. See implementation status. |
 | Threat intelligence | Normalize and match indicators, preserve provenance, review indicator status | Partial; internal matching and reviewer controls implemented in code, unverified; not wired into ingestion |
 | AI investigation | Evidence-linked summaries, correlation, uncertainty, investigation recommendations | Contract/design only; investigation service not implemented |
+| Adaptive intelligence learning | Convert AI discoveries and verified outcomes into reviewed, tested, versioned native knowledge | Design documented in `ADAPTIVE_INTELLIGENCE_LEARNING.md`; no learning pipeline implemented |
 | Policy and approvals | Server-side authorization, risk evaluation, approvals and action governance | Design documented; complete policy service not implemented |
 | Response execution | Narrow typed actions, idempotency, verification, rollback and audit | Not implemented |
 | Configurable Autopilot | Tenant-controlled, risk-bounded automation with OFF default and emergency pause | Technical contract documented; no policy schema, UI or executor |
@@ -47,6 +48,12 @@ No item should be promoted to verified or production-ready without repeatable te
 | Endpoint connectors | Authorized Windows/Linux telemetry collection and controlled local actions | Planned; no production endpoint agent claimed |
 | Integrations | Customer-approved security, identity, cloud and business-system integrations | Planned; integration framework and supported providers need design |
 | Subscription and OniVend integration | Optional product licensing/account integration | Product direction only; not part of the verified security foundation |
+
+## 3.1 Adaptive intelligence learning
+
+OniShield is intended to improve through AI investigation candidates, verified incident outcomes, operator corrections, approved threat intelligence, and controlled lab replay. Candidate knowledge must be quarantined, provenance-backed, tenant-scoped, replay-tested, human-reviewed, versioned, monitored, and reversible before native detection can consume it. AI cannot approve its own candidates or directly change production rules, Autopilot policy, or response permissions. Cross-tenant learning is disabled by default and requires a separate opt-in, privacy, licensing, and authorization design.
+
+**Status:** Design documented; no learning pipeline is implemented.
 
 ## 4. Security operations capabilities
 
@@ -262,3 +269,19 @@ Until separately designed, implemented and reviewed, OniShield must not claim:
 - That a documented feature is already available to customers.
 
 The product must be described according to tested capability, not roadmap ambition.
+
+
+## 10. Consolidated new-feature architecture
+
+The accepted product and technical decisions for the next development stages are maintained in [Consolidated New Features Specification](CONSOLIDATED_NEW_FEATURES_SPEC.md). This is the cross-feature reference for:
+- Native autonomous intelligence that continues without AI.
+- Multi-provider/model gateway and task-based routing.
+- Adaptive intelligence learning with quarantine, human review, replay, versioning, and rollback.
+- Tenant-configurable, risk-bounded Autopilot.
+- Encrypted backup, isolated restore, and disaster recovery.
+- Subscription-included AI allowance plus separately purchased credits.
+- Tenant-isolated threat intelligence and future opt-in sharing.
+- Operational intelligence dashboard and measurable metrics.
+- Cross-feature security invariants and dependency-ordered delivery.
+
+**Status:** Product direction accepted and documented. This is not evidence that these services are implemented. Refer to [Implementation Status](IMPLEMENTATION_STATUS.md) for code-level evidence and verification limits.
