@@ -72,3 +72,5 @@ This is not a customer-side agent, remote network protocol, managed NAS provisio
 ### Latest backup branch validation observation (2026-11-16)
 
 After adding the customer-copy adapter and tests, GitHub Actions run 537 (run ID `43844948288`) was observed as failed. The associated `validate` job completed with failure but returned an empty step list; the job-log download returned a 404 BlobNotFound response. Re-running failed jobs produced the same failure with no executed steps. The failure cause therefore remains unconfirmed, and none of the newly added tests or CI steps can be claimed to have executed. Do not infer a billing, runner, syntax, or test failure from this metadata alone.
+
+A subsequent CI run 538 (run ID `43845147716`) for the latest documentation commit also failed before exposing any job steps. Its `validate` job step list was empty. This confirms the repository integration still cannot provide executable validation evidence through the current Actions path; it does not identify the underlying cause.
