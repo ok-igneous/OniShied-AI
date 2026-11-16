@@ -6,7 +6,12 @@ import { authPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
-import { evaluateAndPersistAroundEvent, listDetectionFindings } from "./detection-finding-store.js";
+import { listDetectionFindings } from "./detection-finding-store.js";
+import {
+  enqueueDetectionEvaluation,
+  getDetectionEvaluationStatus,
+  processOneDetectionEvaluation
+} from "./detection-evaluation-queue.js";
 import { ResendEmailDelivery } from "./email-delivery.js";
 import { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
 import { registerOperatorAccountRoutes } from "./operator-account-routes.js";
@@ -402,7 +407,12 @@ app.post("/v1/events", async (request, reply) => {
         ]
       );
 
-      if (inserted.rowCount === 1) return "accepted" as const;
+      if (inserted.rowCount === 1) {
+        await enqueueDetectionEvaluation(
+          client, config.tenantId, config.connectorId, event.event_id
+        );
+        return "accepted" as const;
+      }
 
       const existing = await client.query<{ payload_sha256: string | null }>(
         `SELECT payload_sha256
@@ -415,9 +425,16 @@ app.post("/v1/events", async (request, reply) => {
         throw new Error("Conflicting event could not be read inside tenant scope");
       }
 
-      return existing.rows[0]?.payload_sha256 === payloadDigest
-        ? "duplicate" as const
-        : "event_id_conflict" as const;
+      if (existing.rows[0]?.payload_sha256 !== payloadDigest) {
+        return "event_id_conflict" as const;
+      }
+
+      // Also backfill a missing job for events accepted before this queue
+      // migration. A completed job remains completed because of the unique key.
+      await enqueueDetectionEvaluation(
+        client, config.tenantId, config.connectorId, event.event_id
+      );
+      return "duplicate" as const;
     });
 
     if (outcome === "event_id_conflict") {
@@ -427,16 +444,18 @@ app.post("/v1/events", async (request, reply) => {
       });
     }
 
-    let detectionStatus: "evaluated" | "pending" = "evaluated";
+    // The event and its queue job were committed atomically. Processing is
+    // deliberately outside ingestion persistence; failures remain durable.
     try {
-      await evaluateAndPersistAroundEvent(config.tenantId, event);
+      await processOneDetectionEvaluation(config.tenantId);
     } catch (detectionError) {
-      // Event durability is independent of detection availability. A connector
-      // replay can safely re-trigger this idempotent evaluation.
-      detectionStatus = "pending";
       request.log.error({ err: detectionError, event_id: event.event_id },
-        "Event stored but detection evaluation failed");
+        "Detection queue processing failed");
     }
+    const jobStatus = await getDetectionEvaluationStatus(
+      config.tenantId, config.connectorId, event.event_id
+    );
+    const detectionStatus = jobStatus === "completed" ? "evaluated" : "pending";
 
     if (outcome === "duplicate") {
       return reply.code(200).send({
