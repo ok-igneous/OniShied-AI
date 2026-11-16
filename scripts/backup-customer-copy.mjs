@@ -62,14 +62,15 @@ export async function copyVerifiedBackupPair({ artifactPath, manifestPath, desti
   }
 
   const sourceDirectory = await realpath(path.dirname(artifactPath));
-  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 });
-  // Check the caller-supplied final path before realpath: checking only the resolved
-  // path would silently accept a symlink and make the symlink test ineffective.
-  const suppliedDestinationInfo = await lstat(destinationDirectory);
+  const requestedDestination = path.resolve(destinationDirectory);
+  await mkdir(requestedDestination, { recursive: true, mode: 0o700 });
+  // Check the normalized caller-supplied final path before realpath: checking only
+  // the resolved path would silently accept a symlink.
+  const suppliedDestinationInfo = await lstat(requestedDestination);
   if (!suppliedDestinationInfo.isDirectory() || suppliedDestinationInfo.isSymbolicLink()) {
     throw new Error("Customer backup destination must be a real directory, not a symlink");
   }
-  const destinationRoot = await realpath(destinationDirectory);
+  const destinationRoot = await realpath(requestedDestination);
   const destinationInfo = await stat(destinationRoot);
   await chmod(destinationRoot, 0o700);
   if (destinationRoot === sourceDirectory ||
