@@ -39,7 +39,7 @@
 
 **Not verified yet.** The latest observed workflow run for a commit on this backup branch completed with failure and reported zero executed steps. No workflow run was returned for the current branch head. The job-step endpoint returned an empty list and the prior workflow-log endpoint was unavailable, so the precise failure cause is unconfirmed. Do not attribute it to billing or runner allocation without fresh GitHub annotations. No passing claim is made for migrations, PostgreSQL RLS tests, unit tests, type-checking, build, or backup/restore integration.
 
-A successful CI run must be observed before treating the database controls or application code as validated. The owner must resolve the GitHub account billing restriction under GitHub **Settings → Billing & plans**; making the repository public does not bypass this account-level restriction.
+A successful CI run must be observed before treating the database controls or application code as validated. Do not infer an account billing restriction from these results. The check-run annotations endpoint was not available through the connected GitHub interface, and no diagnostic message has been retrieved.
 
 ## Next release gates
 
@@ -82,3 +82,8 @@ The latest customer-copy hardening commit `7563c544f1fc66e0f13ba2aa4d23cd30d814d
 
 
 A further workflow run 542 (run ID `43845363650`) for commit `84e26a29964c69d5b9942b29eba836230f4cef86` also completed with failure before any steps were exposed: its `validate` job step list was empty. No test result can be inferred. This repeats the pre-step CI integration failure and still does not establish its cause.
+
+
+### Latest backup branch validation observation (2026-11-16, run 543)
+
+GitHub Actions run 543 (run ID `43845422280`) was triggered for the current branch head `bc6e4076fa840570ee5e425b10534b6ce2cf30cc`. It completed with failure approximately three seconds after start. Its `validate` job again returned `steps: null`, and no job log URL was provided by the jobs endpoint. This is current-head evidence that the failure occurs before any reported workflow step, but it does not identify the underlying cause. The workflow file itself is present and defines a PostgreSQL 16 service and explicit validation steps. Do not change or skip tests to mask this infrastructure/dispatch problem. Check-run metadata reports two annotations, but the annotations endpoint could not be retrieved through the connected GitHub interface. No test, migration, type-check, build, or restore result is claimed.
