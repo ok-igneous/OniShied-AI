@@ -165,4 +165,70 @@ REVOKE ALL ON FUNCTION onishield.save_autopilot_policy(TEXT,INTEGER,BOOLEAN,TEXT
 GRANT EXECUTE ON FUNCTION onishield.get_autopilot_policy(TEXT) TO onishield_auth;
 GRANT EXECUTE ON FUNCTION onishield.save_autopilot_policy(TEXT,INTEGER,BOOLEAN,TEXT,SMALLINT,TEXT[],TEXT[],INTEGER,INTEGER,TIMESTAMPTZ,BOOLEAN,TEXT) TO onishield_auth;
 
+CREATE TABLE onishield.autopilot_policy_decisions (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  actor_operator_id UUID NOT NULL REFERENCES onishield.operators(id),
+  policy_version INTEGER NOT NULL CHECK (policy_version >= 0),
+  action_id TEXT NOT NULL CHECK (length(action_id) BETWEEN 1 AND 80),
+  target_id TEXT NOT NULL CHECK (length(target_id) BETWEEN 1 AND 200),
+  decision TEXT NOT NULL CHECK (decision IN ('allow','deny','approval_required')),
+  reason TEXT NOT NULL CHECK (length(reason) BETWEEN 1 AND 120),
+  risk_tier SMALLINT NOT NULL CHECK (risk_tier BETWEEN 0 AND 3),
+  execution_disposition TEXT NOT NULL CHECK (execution_disposition = 'never_dispatch'),
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE onishield.autopilot_policy_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE onishield.autopilot_policy_decisions FORCE ROW LEVEL SECURITY;
+CREATE POLICY autopilot_decisions_owner_insert ON onishield.autopilot_policy_decisions
+  FOR INSERT TO onishield_owner WITH CHECK (TRUE);
+CREATE POLICY autopilot_decisions_owner_read ON onishield.autopilot_policy_decisions
+  FOR SELECT TO onishield_owner USING (TRUE);
+REVOKE ALL ON onishield.autopilot_policy_decisions
+  FROM PUBLIC, onishield_app, onishield_auth, onishield_reviewer;
+
+CREATE FUNCTION onishield.record_autopilot_simulation(
+  p_token_hash TEXT, p_policy_version INTEGER, p_action_id TEXT, p_target_id TEXT,
+  p_decision TEXT, p_reason TEXT, p_risk_tier SMALLINT, p_execution_disposition TEXT
+) RETURNS BIGINT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, onishield AS $
+DECLARE trusted RECORD; decision_id BIGINT;
+BEGIN
+  IF p_token_hash !~ '^[a-f0-9]{64}
+ OR p_policy_version < 0
+    OR length(COALESCE(p_action_id,'')) NOT BETWEEN 1 AND 80
+    OR length(COALESCE(p_target_id,'')) NOT BETWEEN 1 AND 200
+    OR p_decision NOT IN ('allow','deny','approval_required')
+    OR length(COALESCE(p_reason,'')) NOT BETWEEN 1 AND 120
+    OR p_risk_tier NOT BETWEEN 0 AND 3
+    OR p_execution_disposition <> 'never_dispatch' THEN
+    RAISE EXCEPTION 'Invalid Autopilot simulation audit';
+  END IF;
+  SELECT s.tenant_id,s.operator_id,m.role INTO trusted
+    FROM onishield.operator_sessions s
+    JOIN onishield.operators o ON o.id=s.operator_id
+    JOIN onishield.operator_memberships m
+      ON m.id=s.membership_id AND m.tenant_id=s.tenant_id AND m.operator_id=s.operator_id
+   WHERE s.token_hash=p_token_hash AND s.revoked_at IS NULL AND s.expires_at>NOW()
+     AND o.status='active' AND m.status='active';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  IF trusted.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+  PERFORM set_config('app.tenant_id',trusted.tenant_id,TRUE);
+  INSERT INTO onishield.autopilot_policy_decisions(
+    tenant_id,actor_operator_id,policy_version,action_id,target_id,
+    decision,reason,risk_tier,execution_disposition
+  ) VALUES (
+    trusted.tenant_id,trusted.operator_id,p_policy_version,p_action_id,p_target_id,
+    p_decision,p_reason,p_risk_tier,p_execution_disposition
+  ) RETURNING id INTO decision_id;
+  RETURN decision_id;
+END;
+$;
+
+REVOKE ALL ON FUNCTION onishield.record_autopilot_simulation(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT,SMALLINT,TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onishield.record_autopilot_simulation(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT,SMALLINT,TEXT) TO onishield_auth;
+
 COMMIT;
