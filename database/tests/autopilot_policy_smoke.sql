@@ -19,6 +19,16 @@ VALUES
   ('autopilot-smoke-tenant', :'id', :'membership_id',
    repeat('a',64), NOW()+INTERVAL '1 hour', NOW());
 
+INSERT INTO onishield.operator_memberships(tenant_id,operator_id,role,status)
+VALUES ('autopilot-smoke-tenant-b', :'id', 'viewer', 'active')
+RETURNING id \\gset membership_b_
+
+INSERT INTO onishield.operator_sessions
+  (tenant_id,operator_id,membership_id,token_hash,expires_at,step_up_at)
+VALUES
+  ('autopilot-smoke-tenant-b', :'id', :'membership_b_id',
+   repeat('b',64), NOW()+INTERVAL '1 hour', NOW());
+
 SET LOCAL ROLE onishield_auth;
 SELECT * FROM onishield.save_autopilot_policy(
   repeat('a',64), 0, TRUE, 'observe', 0::SMALLINT,
@@ -26,6 +36,14 @@ SELECT * FROM onishield.save_autopilot_policy(
   10, 1, NULL, FALSE, 'initial isolated lab policy'
 );
 SELECT * FROM onishield.get_autopilot_policy(repeat('a',64));
+DO $
+DECLARE policy RECORD;
+BEGIN
+  SELECT * INTO policy FROM onishield.get_autopilot_policy(repeat('b',64));
+  IF policy.tenant_id <> 'autopilot-smoke-tenant-b' OR policy.policy_version <> 0 THEN
+    RAISE EXCEPTION 'Autopilot policy tenant isolation failed';
+  END IF;
+END $;
 SELECT onishield.record_autopilot_simulation(
   repeat('a',64),1,'evidence.collect','lab-host-1','allow',
   'observe_only_no_dispatch',0::SMALLINT,'never_dispatch'
@@ -41,9 +59,24 @@ BEGIN
   IF decision_count <> 1 THEN RAISE EXCEPTION 'Simulation decision audit was not recorded'; END IF;
 END $$;
 
+SET LOCAL ROLE onishield_owner;
+UPDATE onishield.operator_sessions SET step_up_at=NOW()-INTERVAL '6 minutes'
+ WHERE token_hash=repeat('a',64);
+
 SET LOCAL ROLE onishield_auth;
-DO $$
+DO $
 BEGIN
+  BEGIN
+    PERFORM * FROM onishield.save_autopilot_policy(
+      repeat('a',64), 1, TRUE, 'observe', 0::SMALLINT,
+      ARRAY['evidence.collect'], ARRAY['lab-host-1'],
+      10, 1, NULL, FALSE, 'expired step-up should fail'
+    );
+    RAISE EXCEPTION 'Expired step-up was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%Step-up authentication required%' THEN RAISE; END IF;
+  END;
+
   BEGIN
     PERFORM * FROM onishield.save_autopilot_policy(
       repeat('a',64), 0, TRUE, 'observe', 0::SMALLINT,
