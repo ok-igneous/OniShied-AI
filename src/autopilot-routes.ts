@@ -119,8 +119,14 @@ export function registerAutopilotRoutes(
       // Never accept client-supplied booleans as proof of either property.
       const simulation = evaluateAutopilotPolicy(policy, parsed.data.actionId,
         parsed.data.targetId, { targetVerified: false, evidenceFresh: false });
+      const audit = await database.query<{ decision_id: string }>(
+        "SELECT onishield.record_autopilot_simulation($1,$2,$3,$4,$5,$6,$7,$8) AS decision_id",
+        [hashOperatorSessionToken(token),simulation.policyVersion,simulation.actionId,
+          parsed.data.targetId,simulation.decision,simulation.reason,simulation.riskTier,
+          simulation.execution]
+      );
       reply.header("cache-control", "no-store");
-      return { simulation };
+      return { simulation, auditId: audit.rows[0]?.decision_id };
     } catch (error) {
       if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({ error: "unauthorized" });
       if (error instanceof Error && error.message === "forbidden") return reply.code(403).send({ error: "forbidden" });
