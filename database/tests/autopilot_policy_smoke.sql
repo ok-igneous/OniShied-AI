@@ -26,13 +26,19 @@ SELECT * FROM onishield.save_autopilot_policy(
   10, 1, NULL, FALSE, 'initial isolated lab policy'
 );
 SELECT * FROM onishield.get_autopilot_policy(repeat('a',64));
+SELECT onishield.record_autopilot_simulation(
+  repeat('a',64),1,'evidence.collect','lab-host-1','allow',
+  'observe_only_no_dispatch',0::SMALLINT,'never_dispatch'
+);
 
 SET LOCAL ROLE onishield_owner;
 DO $$
-DECLARE audit_count INTEGER;
+DECLARE audit_count INTEGER; decision_count INTEGER;
 BEGIN
   SELECT count(*) INTO audit_count FROM onishield.autopilot_policy_audit;
+  SELECT count(*) INTO decision_count FROM onishield.autopilot_policy_decisions;
   IF audit_count <> 1 THEN RAISE EXCEPTION 'Policy audit was not recorded'; END IF;
+  IF decision_count <> 1 THEN RAISE EXCEPTION 'Simulation decision audit was not recorded'; END IF;
 END $$;
 
 SET LOCAL ROLE onishield_auth;
@@ -68,8 +74,11 @@ BEGIN
      OR has_table_privilege(current_user,'onishield.autopilot_policies','UPDATE')
      OR has_table_privilege(current_user,'onishield.autopilot_policy_audit','SELECT')
      OR has_table_privilege(current_user,'onishield.autopilot_policy_audit','DELETE')
+     OR has_table_privilege(current_user,'onishield.autopilot_policy_decisions','SELECT')
+     OR has_table_privilege(current_user,'onishield.autopilot_policy_decisions','DELETE')
      OR has_function_privilege(current_user,'onishield.get_autopilot_policy(text)','EXECUTE')
-     OR has_function_privilege(current_user,'onishield.save_autopilot_policy(text,integer,boolean,text,smallint,text[],text[],integer,integer,timestamp with time zone,boolean,text)','EXECUTE') THEN
+     OR has_function_privilege(current_user,'onishield.save_autopilot_policy(text,integer,boolean,text,smallint,text[],text[],integer,integer,timestamp with time zone,boolean,text)','EXECUTE')
+     OR has_function_privilege(current_user,'onishield.record_autopilot_simulation(text,integer,text,text,text,text,smallint,text)','EXECUTE') THEN
     RAISE EXCEPTION 'Runtime role has excessive Autopilot privileges';
   END IF;
 END $$;
