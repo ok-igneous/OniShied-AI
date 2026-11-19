@@ -57,10 +57,10 @@ export function registerAutopilotRoutes(
     if (!auth || !database) return reply.code(503).send({ error: "autopilot_unavailable" });
     if (!token) return reply.code(401).send({ error: "unauthorized" });
     try {
-      await auth.authorize(token, "detection:read");
+      const principal = await auth.authorize(token, "detection:read");
       const result = await database.query("SELECT * FROM onishield.get_autopilot_policy($1)",
         [hashOperatorSessionToken(token)]);
-      const policy = result.rows[0] ? mapPolicy(result.rows[0]) : defaultAutopilotPolicy("");
+      const policy = result.rows[0] ? mapPolicy(result.rows[0]) : defaultAutopilotPolicy(principal.tenantId);
       reply.header("cache-control", "no-store");
       return { policy };
     } catch (error) {
@@ -109,12 +109,12 @@ export function registerAutopilotRoutes(
     }).strict().safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_simulation_request" });
     try {
-      await auth.authorize(token, "detection:read");
+      const principal = await auth.authorize(token, "detection:read");
       const result = await database.query("SELECT * FROM onishield.get_autopilot_policy($1)",
         [hashOperatorSessionToken(token)]);
       const policy = result.rows[0]
         ? mapPolicy(result.rows[0])
-        : defaultAutopilotPolicy("");
+        : defaultAutopilotPolicy(principal.tenantId);
       // Target enrollment and evidence-freshness services are not yet wired.
       // Never accept client-supplied booleans as proof of either property.
       const simulation = evaluateAutopilotPolicy(policy, parsed.data.actionId,
