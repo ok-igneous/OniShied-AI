@@ -130,6 +130,7 @@ export function registerAutopilotRoutes(
     } catch (error) {
       if (error instanceof Error && error.message === "unauthorized") return reply.code(401).send({ error: "unauthorized" });
       if (error instanceof Error && error.message === "forbidden") return reply.code(403).send({ error: "forbidden" });
+      if (error instanceof Error && /Stale Autopilot policy version/.test(error.message)) return reply.code(409).send({ error: "policy_version_conflict" });
       request.log.error({ err: error }, "Autopilot simulation failed");
       return reply.code(503).send({ error: "autopilot_unavailable" });
     }
