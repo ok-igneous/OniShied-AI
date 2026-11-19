@@ -6,7 +6,6 @@ import { authPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
-import { listDetectionFindings } from "./detection-finding-store.js";
 import {
   enqueueDetectionEvaluation,
   getDetectionEvaluationStatus,
@@ -15,6 +14,8 @@ import {
 import { ResendEmailDelivery } from "./email-delivery.js";
 import { OperatorAccountLifecycle } from "./operator-account-lifecycle.js";
 import { registerOperatorAccountRoutes } from "./operator-account-routes.js";
+import { registerAutopilotRoutes } from "./autopilot-routes.js";
+import { registerSystemRoutes } from "./system-routes.js";
 
 const operatorAuth = authPool && config.authRateLimitSecret && config.mfaEncryptionKey && config.mfaRecoveryPepper
   ? new OperatorAuthService(authPool, config.authRateLimitSecret, config.mfaEncryptionKey, config.mfaRecoveryPepper)
@@ -61,6 +62,7 @@ const accountLifecycle = authPool && config.authRateLimitSecret && config.mfaRec
     )
   : null;
 registerOperatorAccountRoutes(app, accountLifecycle);
+registerAutopilotRoutes(app, operatorAuth, authPool);
 
 function authorizedBearer(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -336,32 +338,7 @@ app.post<{ Params: { indicatorId: string } }>(
   }
 );
 
-app.get("/v1/findings", async (request, reply) => {
-  if (!authorizedBearer(request.headers.authorization)) {
-    return reply.code(401).send({ error: "unauthorized" });
-  }
-  const parsed = z.object({
-    limit: z.coerce.number().int().min(1).max(500).default(100)
-  }).strict().safeParse(request.query);
-  if (!parsed.success) return reply.code(400).send({ error: "invalid_findings_query" });
-  try {
-    const findings = await listDetectionFindings(config.tenantId, parsed.data.limit);
-    reply.header("cache-control", "no-store");
-    return { findings };
-  } catch (error) {
-    request.log.error({ err: error }, "Failed to list detection findings");
-    return reply.code(503).send({ error: "findings_unavailable" });
-  }
-});
-
-app.get("/health", async (_request, reply) => {
-  try {
-    await pool.query("SELECT 1");
-    return { status: "ok", database: "connected" };
-  } catch {
-    return reply.code(503).send({ status: "degraded", database: "unavailable" });
-  }
-});
+registerSystemRoutes(app, pool, config.tenantId, config.connectorToken);
 
 app.post("/v1/events", async (request, reply) => {
   if (!authorizedBearer(request.headers.authorization)) {

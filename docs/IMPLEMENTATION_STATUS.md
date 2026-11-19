@@ -36,7 +36,7 @@
 - Automatic threat-feed ingestion, global intelligence, cross-tenant sharing, public review APIs, AI approvals, and automated blocking are not implemented.
 - Adaptive intelligence learning is design-only (`docs/ADAPTIVE_INTELLIGENCE_LEARNING.md`). There is no candidate quarantine/review/replay/publishing pipeline. AI cannot currently submit or activate learned knowledge; do not describe the product as self-learning.
 - No AI agent or response execution is authorized by the current foundation.
-- Configurable Autopilot has a normative design contract only: tenant opt-in, default OFF, bounded modes, per-action policy, risk ceilings, human approval for disruptive actions, Tier 3 prohibition, emergency pause, fail-closed checks, and execution audit. No Autopilot policy schema, UI, or executor is implemented.
+- Configurable Autopilot has a normative design contract. The feature/autopilot-policy-simulator branch adds tenant-scoped versioned policy storage, step-up-protected owner/admin changes, append-only policy and simulation-decision audit, deterministic action risk classification, a fail-closed policy simulator, and API routes. There is no UI, approval workflow, asset/evidence resolver, rate/concurrency enforcement, or response executor. All simulations are never-dispatch.
 - Backup and Disaster Recovery has a normative design contract only: encrypted layered backups, isolated/immutable copies, integrity manifests, tenant-safe restore, clean-room recovery, credential re-enrollment, and restore drills. No backup scheduler, vault integration, restore tooling, or verified recovery capability is implemented.
 
 ## Verification status
@@ -57,3 +57,12 @@ A successful CI run must be observed before treating the database controls or ap
 8. Only after those gates, implement a reversible lab action and then explicitly opt-in low-risk automation. Tier 2 always requires approval; Tier 3 remains excluded.
 
 Do not describe OniShield AI as production-ready, fully protective, or autonomously responding to threats.
+
+## Autopilot policy simulator — implementation branch
+
+- A versioned, tenant-bound policy schema is implemented in migration 017 with an append-only policy audit record. Policy writes derive tenant/operator identity from the opaque authenticated session, require owner/admin role and a fresh five-minute step-up, and reject stale expected versions.
+- The server-owned action catalogue classifies read-only evidence collection (Tier 0), temporary alert labels (Tier 1), disruptive network blocks (Tier 2), and destructive device wipe (Tier 3). Tier 3 is always prohibited; Tier 1 and Tier 2 remain approval-required in this slice because an independent approval workflow is not yet implemented.
+- Policy simulation always returns `execution: never_dispatch`. The HTTP simulator intentionally treats targets as unverified and evidence as missing/stale until trusted asset-enrollment and evidence-freshness services are integrated. It never accepts client-supplied verification flags.
+- Emergency pause, policy expiry, action allowlist, target scope, risk ceiling, rate/concurrency configuration, and optimistic policy-version conflict handling are represented. Rate/concurrency enforcement at dispatch time is not claimed because there is no executor.
+- Unit tests cover default OFF, Observe no-dispatch, tier boundaries, unknown actions, target scope, evidence, expiry, emergency pause, and risk ceilings.
+- This branch is not yet runtime-verified. Apply migration 017, run unit tests/typecheck/build/source-line checks and PostgreSQL integration tests before merging. No response executor or production Autopilot capability is included.
