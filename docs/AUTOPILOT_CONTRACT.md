@@ -1,6 +1,6 @@
 # Configurable Autopilot — Technical Contract
 
-**Status:** Normative design contract; not implemented.  
+**Status:** Normative design contract; policy simulator implemented in feature branch. No response executor is implemented.  
 **Initial deployment:** Synthetic, isolated lab only.  
 **Default state:** Disabled.  
 **Authority:** Policy-bounded execution only; AI never grants itself permission.
@@ -115,3 +115,8 @@ Release sequence:
 5. Production action adapters only after restore, rollback, monitoring, and incident-response gates pass.
 
 No production Autopilot claim is permitted until these gates pass.
+
+
+## Implementation boundary — policy simulator branch
+
+The current implementation adds tenant-scoped versioned policy storage, owner/admin changes protected by recent step-up authentication, append-only policy-change and simulation-decision audit, a server-owned action catalogue, and a deterministic simulator. All simulation results are marked `never_dispatch`. Tier 3 remains prohibited; Tier 1 and Tier 2 remain approval-required until an independent approval workflow exists. Target enrollment and evidence-freshness resolution are not yet integrated, so the HTTP simulation endpoint fails closed for those checks. Rate and concurrency values are configuration only until a response executor exists.
