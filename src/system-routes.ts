@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { listDetectionFindings } from "./detection-finding-store.js";
 
@@ -18,8 +19,8 @@ export function registerSystemRoutes(
     if (!authorizedBearer(request.headers.authorization, connectorToken)) {
       return reply.code(401).send({ error: "unauthorized" });
     }
-    const parsed = (await import("zod")).z.object({
-      limit: (await import("zod")).z.coerce.number().int().min(1).max(500).default(100)
+    const parsed = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(100)
     }).strict().safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_findings_query" });
     try {
