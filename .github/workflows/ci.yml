@@ -97,6 +97,13 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d onishield_lab \
             -v ON_ERROR_STOP=1 -f database/tests/operator_email_lifecycle_smoke.sql
 
+      - name: Verify Autopilot policy tenant, audit and privilege controls
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d onishield_lab \
+            -v ON_ERROR_STOP=1 -f database/tests/autopilot_policy_smoke.sql
+
       - name: Enforce source-file size limit
         run: npm run check:lines
 
