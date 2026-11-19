@@ -193,7 +193,7 @@ CREATE FUNCTION onishield.record_autopilot_simulation(
   p_decision TEXT, p_reason TEXT, p_risk_tier SMALLINT, p_execution_disposition TEXT
 ) RETURNS BIGINT
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, onishield AS $
-DECLARE trusted RECORD; decision_id BIGINT;
+DECLARE trusted RECORD; decision_id BIGINT; current_version INTEGER;
 BEGIN
   IF p_token_hash !~ '^[a-f0-9]{64}
  OR p_policy_version < 0
@@ -217,6 +217,13 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
   PERFORM set_config('app.tenant_id',trusted.tenant_id,TRUE);
+  PERFORM pg_advisory_xact_lock(hashtextextended(trusted.tenant_id, 0));
+  SELECT p.policy_version INTO current_version
+    FROM onishield.autopilot_policies p WHERE p.tenant_id=trusted.tenant_id;
+  IF NOT FOUND THEN current_version := 0; END IF;
+  IF current_version <> p_policy_version THEN
+    RAISE EXCEPTION 'Stale Autopilot policy version';
+  END IF;
   INSERT INTO onishield.autopilot_policy_decisions(
     tenant_id,actor_operator_id,policy_version,action_id,target_id,
     decision,reason,risk_tier,execution_disposition
