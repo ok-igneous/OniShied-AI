@@ -192,11 +192,10 @@ CREATE FUNCTION onishield.record_autopilot_simulation(
   p_token_hash TEXT, p_policy_version INTEGER, p_action_id TEXT, p_target_id TEXT,
   p_decision TEXT, p_reason TEXT, p_risk_tier SMALLINT, p_execution_disposition TEXT
 ) RETURNS BIGINT
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, onishield AS $
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, onishield AS $$
 DECLARE trusted RECORD; decision_id BIGINT; current_version INTEGER;
 BEGIN
-  IF p_token_hash !~ '^[a-f0-9]{64}
- OR p_policy_version < 0
+  IF p_token_hash !~ '^[a-f0-9]{64}$' OR p_policy_version < 0
     OR length(COALESCE(p_action_id,'')) NOT BETWEEN 1 AND 80
     OR length(COALESCE(p_target_id,'')) NOT BETWEEN 1 AND 200
     OR p_decision NOT IN ('allow','deny','approval_required')
@@ -233,7 +232,7 @@ BEGIN
   ) RETURNING id INTO decision_id;
   RETURN decision_id;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION onishield.record_autopilot_simulation(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT,SMALLINT,TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION onishield.record_autopilot_simulation(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT,SMALLINT,TEXT) TO onishield_auth;
