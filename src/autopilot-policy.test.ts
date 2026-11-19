@@ -64,6 +64,15 @@ test("unknown actions fail closed", () => {
   assert.equal(result.reason, "action_not_in_server_catalogue");
 });
 
+test("an action omitted from the tenant allowlist is denied", () => {
+  const result = evaluateAutopilotPolicy(
+    enabledPolicy({ allowedActions: ["evidence.collect"] }),
+    "alert.label.add", "host-1", trusted
+  );
+  assert.equal(result.decision, "deny");
+  assert.equal(result.reason, "action_not_allowlisted");
+});
+
 test("cross-scope and unverified targets fail closed", () => {
   assert.equal(
     evaluateAutopilotPolicy(enabledPolicy(), "evidence.collect", "host-2", trusted).reason,
