@@ -6,7 +6,6 @@ import { authPool, pool, withTenantTransaction } from "./database.js";
 import { OperatorAuthService, OperatorLoginRateLimitError } from "./operator-auth-service.js";
 import { securityEventSchema } from "./security-event.js";
 import { securityEventDigest } from "./security-event-digest.js";
-import { listDetectionFindings } from "./detection-finding-store.js";
 import {
   enqueueDetectionEvaluation,
   getDetectionEvaluationStatus,
