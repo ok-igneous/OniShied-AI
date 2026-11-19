@@ -68,7 +68,8 @@ BEGIN
      AND m.operator_id = s.operator_id
    WHERE s.token_hash = p_token_hash AND s.revoked_at IS NULL
      AND s.expires_at > NOW() AND o.status = 'active' AND m.status = 'active';
-  IF NOT FOUND OR trusted.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
+  IF NOT FOUND THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  IF trusted.role NOT IN ('owner','admin','security_analyst','reviewer','viewer') THEN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
   PERFORM set_config('app.tenant_id', trusted.tenant_id, TRUE);
@@ -115,12 +116,14 @@ BEGIN
    WHERE s.token_hash=p_token_hash AND s.revoked_at IS NULL AND s.expires_at>NOW()
      AND o.status='active' AND m.status='active'
    FOR UPDATE OF s;
-  IF NOT FOUND OR trusted.role NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Forbidden'; END IF;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Forbidden'; END IF;
+  IF trusted.role NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Forbidden'; END IF;
   IF trusted.step_up_at IS NULL OR trusted.step_up_at < NOW()-INTERVAL '5 minutes' THEN
     RAISE EXCEPTION 'Step-up authentication required';
   END IF;
 
   PERFORM set_config('app.tenant_id',trusted.tenant_id,TRUE);
+  PERFORM pg_advisory_xact_lock(hashtextextended(trusted.tenant_id, 0));
   SELECT p.policy_version INTO current_version
     FROM onishield.autopilot_policies p WHERE p.tenant_id=trusted.tenant_id FOR UPDATE;
   IF NOT FOUND THEN current_version := 0; END IF;
