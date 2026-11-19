@@ -36,7 +36,7 @@
 - Automatic threat-feed ingestion, global intelligence, cross-tenant sharing, public review APIs, AI approvals, and automated blocking are not implemented.
 - Adaptive intelligence learning is design-only (`docs/ADAPTIVE_INTELLIGENCE_LEARNING.md`). There is no candidate quarantine/review/replay/publishing pipeline. AI cannot currently submit or activate learned knowledge; do not describe the product as self-learning.
 - No AI agent or response execution is authorized by the current foundation.
-- Configurable Autopilot has a normative design contract only: tenant opt-in, default OFF, bounded modes, per-action policy, risk ceilings, human approval for disruptive actions, Tier 3 prohibition, emergency pause, fail-closed checks, and execution audit. No Autopilot policy schema, UI, or executor is implemented.
+- Configurable Autopilot has a normative design contract. The feature/autopilot-policy-simulator branch adds tenant-scoped versioned policy storage, step-up-protected owner/admin changes, append-only policy and simulation-decision audit, deterministic action risk classification, a fail-closed policy simulator, and API routes. There is no UI, approval workflow, asset/evidence resolver, rate/concurrency enforcement, or response executor. All simulations are never-dispatch.
 - Backup and Disaster Recovery has a normative design contract only: encrypted layered backups, isolated/immutable copies, integrity manifests, tenant-safe restore, clean-room recovery, credential re-enrollment, and restore drills. No backup scheduler, vault integration, restore tooling, or verified recovery capability is implemented.
 
 ## Verification status
